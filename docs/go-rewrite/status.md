@@ -35,8 +35,8 @@ Image: 22 MB, distroless static, non-root, no shell. Binary 11 MB.
 
 ## Open items
 
-- `GEMINI_API_KEY` must be set on the `poller` service in `wire-futbol-go-staging`. Until then new items stay pending on staging.
+- Gemini key set on staging; first filtered run finished 15:01 UTC on 23 October.
 - Real fixtures for the RSS feeds, liverpoolfc.com and the fixtures page: the poller saves every response under `fixtures/` in the staging bucket (`SAVE_FIXTURES=1`), but this session can't reach those sites or read the bucket keys. They need copying into `testdata/` and wiring into the parser tests.
-- Parity report: due 24 hours after the Gemini key is set.
+- Parity report: due after 15:20 UTC on 24 October (window starts 14:47 UTC on 23 October).
 - Spool: Worker `spool` and KV namespace `spool-seen` still exist on Cloudflare.
 - At cutover: move `deploy/Dockerfile` to the root, copy `state.json` and `subs.json` to `lfc/` keys, and run `wire squad` once (FPL status history starts again; production's Postgres history also only began on 23 October).
