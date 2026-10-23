@@ -63,6 +63,7 @@ Container: `docker build -f deploy/Dockerfile -t wire-futbol .` then `docker run
 | `INGEST_MAX_AGE_H` | poll | 72 |
 | `SOURCES` | poll: comma-separated source keys to read | all |
 | `SEED_STATE_URLS` | poll, staging only: `lfc=https://.../api/state.json` | none |
+| `LEGACY_CLUB` | serve, poll: copies the Bun app's root `state.json` and `subs.json` to this club's keys if they don't exist yet | none |
 | `SAVE_FIXTURES` | poll, squad: `1` saves every fetched body under `fixtures/` in the store | off |
 | `PRICE_IN_PER_MTOK_USD`, `PRICE_OUT_PER_MTOK_USD`, `USD_TO_GBP` | serve | 0.75, 3.75, 0.75 |
 

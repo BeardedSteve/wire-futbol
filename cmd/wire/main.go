@@ -108,8 +108,26 @@ func fetchClient(st store.Store) *fetch.Client {
 	return c
 }
 
+// adoptLegacy copies the Bun app's state.json and subs.json from the bucket root to the LEGACY_CLUB club's keys, once.
+// The root files are left alone so the Bun app can be put back.
+func adoptLegacy(ctx context.Context, st store.Store) {
+	c := club.BySlug(os.Getenv("LEGACY_CLUB"))
+	if c == nil {
+		return
+	}
+	for from, to := range map[string]string{"state.json": poll.StateKey(c), "subs.json": poll.SubsKey(c)} {
+		copied, err := store.CopyIfAbsent(ctx, st, from, to, "application/json")
+		if err != nil {
+			slog.Error("legacy copy failed", "from", from, "to", to, "err", err)
+		} else if copied {
+			slog.Info("legacy file copied", "from", from, "to", to)
+		}
+	}
+}
+
 func serve(ctx context.Context) error {
 	st := openStore()
+	adoptLegacy(ctx, st)
 	s, err := web.New(web.Config{
 		Resolver:      club.Resolver{Default: os.Getenv("DEFAULT_CLUB")},
 		CanonicalHost: os.Getenv("CANONICAL_HOST"),
@@ -147,6 +165,7 @@ func serve(ctx context.Context) error {
 
 func runPoll(ctx context.Context) error {
 	st := openStore()
+	adoptLegacy(ctx, st)
 	var sender *push.Sender
 	if v := vapid(); v != nil {
 		sender = &push.Sender{VAPID: v}
