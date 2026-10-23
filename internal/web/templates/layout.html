@@ -1,41 +1,51 @@
-{{define "layout"}}<!doctype html><html lang="en-GB"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+{{define "head"}}<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{{.Title}}</title>
 <meta name="description" content="{{.Club.Name}} news from tier 1 sources only, filtered and summarised.">
-<meta name="theme-color" content="#F5F6F7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0E1215" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#efeadf" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#14120f" media="(prefers-color-scheme: dark)">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":6}'>
 <link rel="icon" href="{{.Favicon}}"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="{{.Club.App}}"><meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="{{.Fonts}}">
-<link rel="stylesheet" href="{{asset "app.css"}}"><link rel="stylesheet" href="/club.css">{{range .CSS}}<link rel="stylesheet" href="{{asset .}}">{{end}}
-</head><body{{if .Rail}} class="has-rail-page"{{end}} data-page="{{.Page}}"{{if .LastRun}} data-last-run="{{.LastRun}}"{{end}}{{if .Page | eq "wire"}} data-stories="{{.StoryCount}}"{{end}}>
-<a class="skip" href="#main">Skip to content</a>
-<header class="bar"><div class="bar-in">
-  {{template "mark" .}}
-  <nav class="nav" aria-label="Sections">
-    <a class="navl" href="/squad"{{if eq .Active "squad"}} aria-current="page"{{end}}>{{icon "squad"}}<span>Squad</span></a>
-    <a class="navl" href="/shorts" id="shorts-link">{{icon "play"}}<span>Shorts</span><span class="navl-n" id="shorts-n" hidden></span></a>
-    <button type="button" class="alerts-btn" id="alerts-btn" hidden aria-haspopup="dialog" aria-expanded="false">{{icon "bell"}}<span class="alerts-label">Alerts</span></button>
-    <a class="live {{.Live.Tone}}" href="/status" title="{{.Live.Title}}" aria-label="Wire status: {{if .Live.Stale}}not updating{{else}}{{.Live.Label}}{{end}}"{{if eq .Active "status"}} aria-current="page"{{end}}><span class="pulse" aria-hidden="true"></span><span class="live-long">{{if .Live.Stale}}Not updating{{else}}{{.Live.Label}}{{end}}</span><span class="live-short" aria-hidden="true">{{.Live.Short}}</span></a>
-  </nav>
-</div></header>
-{{block "top" .}}{{end}}
-<div class="wrap">
-  {{if and .Live.Stale (ne .Active "status")}}<div class="banner" role="status"><span class="sdot bad" aria-hidden="true"></span><span>The wire hasn't updated since {{.Live.Since}}, so recent news may be missing. <a href="/status">See status</a></span></div>{{end}}
-  <div class="layout{{if .Rail}} has-rail{{end}}">
-    <main id="main" tabindex="-1">{{template "main" .}}</main>
-    {{if .Rail}}<aside class="rail" aria-label="Fixtures and wire status">{{block "rail" .}}{{end}}</aside>{{end}}
+<link rel="preload" href="{{asset "Bedstead.woff2"}}" as="font" type="font/woff2" crossorigin><link rel="preload" href="{{asset "Newsreader-latin.woff2"}}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{asset "wire.css"}}"><link rel="stylesheet" href="{{.ClubCSS}}">{{end}}
+
+{{define "titleblock"}}<header class="tb"><div class="tb-in">
+  <a class="brand" href="/" aria-label="{{.Club.App}}, home"><i aria-hidden="true"></i>{{.Club.Short}}<b>Wire</b></a>
+  <div class="cells">
+    <span class="pg" aria-hidden="true"><span class="k">Page</span><span class="v" id="pgnum" data-no="{{.No}}">P{{.No}}</span></span>
+    <span class="rev" aria-hidden="true"><span class="k">Time</span><span class="v" data-clock>{{.Clock}}</span></span>
+    <span class="date" aria-hidden="true"><span class="k">Date</span><span class="v">{{.Date}}</span></span>
+    <a class="st {{.Live.Tone}}" href="/status" title="{{.Live.Title}}" aria-label="Wire status: {{if .Live.Stale}}not updating{{else}}{{.Live.Title}}, updated {{.Live.Since}}{{end}}"><span class="k">Updated</span><span class="v">{{.Live.Label}}</span></a>
+    <button type="button" class="bell" id="alerts-btn" hidden aria-haspopup="dialog" aria-expanded="false"><span class="k">Phone</span><span class="v alerts-l">Alerts</span></button>
   </div>
-  <footer class="foot"><p>Reads {{.Club.ReadsLine}} every 15 minutes. Summaries are machine-written from each outlet's headline and standfirst, so follow the link before relying on detail.</p><p class="foot-links"><a href="/squad">Squad</a><a href="/status">Status</a><a href="/filtered">What the filter kept out</a></p></footer>
+</div></header>{{end}}
+
+{{define "layout"}}<!doctype html><html lang="en-GB" data-now="{{.Now}}"><head>
+{{template "head" .}}
+<script src="{{asset "htmx.min.js"}}" defer></script><script src="{{asset "wire.js"}}" defer></script><script src="{{asset "push.js"}}" defer></script>
+</head><body hx-boost="true" data-pages="{{.Pages}}">
+<a class="skip" href="#main">Skip to content</a>
+{{template "titleblock" .}}
+<nav class="idx" aria-label="Pages">{{range .Nav}}<a href="{{.URL}}"{{if eq .Key "shorts"}} hx-boost="false"{{end}}{{if .Current}} aria-current="page"{{end}}><b>{{.No}}</b>{{.Label}}{{if eq .Key "shorts"}}<span class="unseen" data-shorts-n hidden></span>{{end}}</a>{{end}}</nav>
+<div class="wrap">
+  <div class="ptitle"><h1>{{if .H1}}{{.H1}} {{end}}<em>{{.Em}}</em></h1>{{if .Sub}}<p class="mono">{{.Sub}}</p>{{end}}</div>
+  {{if and .Live.Stale (ne .Active "status")}}<p class="stale" role="status"><span class="sq bad" aria-hidden="true"></span>Not updating since {{.Live.Since}}. Recent news may be missing. <a href="/status">Status 600</a></p>{{end}}
+  {{block "top" .}}{{end}}
+  <div class="cols{{if .Rail}} has-rail{{end}}">
+    <main id="main" tabindex="-1">{{template "main" .}}</main>
+    {{if .Rail}}<aside class="rail" aria-label="Fixtures, table, treatment room and sources">{{block "rail" .}}{{end}}</aside>{{end}}
+  </div>
+  <footer class="foot"><p>Reads {{.Club.ReadsLine}} every 15 minutes. Opinion, rumour and clickbait are <a href="/spiked">spiked</a>.</p><p class="n">Summaries are machine-written from each outlet's headline and standfirst. They can be wrong. Follow the link before relying on detail.</p></footer>
 </div>
-<div class="sheet" id="alerts-sheet" role="dialog" aria-modal="false" aria-labelledby="sheet-h" hidden><div class="sheet-in">
-  <p class="sheet-h" id="sheet-h">Phone alerts</p><div id="sheet-body"></div>
-</div></div>
-<div class="toast" id="toast" hidden><button type="button" id="toast-btn">New stories. Show them</button></div>
-<script src="{{asset "client.js"}}"></script><script src="{{asset "push.js"}}"></script>{{range .Scripts}}<script src="{{asset .}}"></script>{{end}}<script src="{{asset "boot.js"}}"></script>
+<nav class="tabbar" aria-label="Sections">{{range $i, $l := .Nav}}{{if lt $i 4}}<a href="{{.URL}}"{{if eq .Key "shorts"}} hx-boost="false"{{end}}{{if .Current}} aria-current="page"{{end}}><span>{{.Label}}{{if eq .Key "shorts"}}<span class="unseen" data-shorts-n hidden></span>{{end}}</span><b>{{.No}}</b></a>{{end}}{{end}}</nav>
+<dialog class="sheet" id="alerts-sheet" aria-labelledby="sheet-h"><p class="sheet-h" id="sheet-h">Phone alerts</p><div id="sheet-body"></div></dialog>
 </body></html>{{end}}
 
-{{define "mark"}}<a class="mark" href="/" aria-label="{{.Club.App}}, home"><span class="mark-lfc">{{.Club.Mark}}</span><span class="mark-wire">Wire</span></a>{{end}}
+{{define "empty"}}<div class="empty"><p>{{index . 0}}</p><p>{{index . 1}}</p></div>{{end}}
 
-{{define "empty"}}<div class="empty"><p class="empty-h">{{index . 0}}</p><p>{{index . 1}}</p></div>{{end}}
+{{define "sec"}}<h2 class="sec"><span>{{index . 0}}</span>{{if gt (len .) 1}}<small>{{index . 1}}</small>{{end}}</h2>{{end}}
 
-{{define "crumb"}}<nav class="crumb" aria-label="Breadcrumb"><a href="/">Wire</a><span aria-hidden="true">/</span><span aria-current="page">{{.}}</span></nav>{{end}}
+{{define "fixtures"}}<ol class="fxl">{{range .}}<li><a href="{{.URL}}" rel="noopener" target="_blank"><span class="d">{{.Day}}</span><span class="o">{{if not .Home}}<span class="at">at</span> {{end}}{{.Opp}}</span><span class="c">{{.Competition}} {{.HM}}</span></a></li>{{end}}</ol>{{end}}
+
+{{define "pos"}}<div class="pos"><b>{{.Pos}}</b><span>{{.Ord}}, {{.Pts}} pts<br>{{.Played}} played, GD {{.GD}}</span></div>{{if .Form}}<p class="form"><span class="l">Form</span>{{range .Form}}<span class="r {{.Res}}" title="{{.Title}}">{{.Res}}</span>{{end}}<span class="sr-only">, oldest first</span></p>{{end}}{{end}}
+
+{{define "league"}}<table class="lg"><tbody>{{range .}}<tr{{if .Me}} class="me"{{end}}><td>{{.Pos}}</td><td><abbr title="{{.Name}}">{{.Short}}</abbr></td><td>{{.P}}</td><td>{{.GD}}</td><td>{{.Pts}}</td></tr>{{end}}</tbody></table>{{end}}

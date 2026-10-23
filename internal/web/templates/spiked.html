@@ -1,0 +1,11 @@
+{{define "main"}}{{if not .Data}}{{template "empty" (list "Nothing yet" "No run has finished.")}}{{else}}{{with .Data}}
+<p class="lead">Everything the filter rejected in the last 14 days, and why. If something here should have made the wire, the filter is too strict.</p>
+<dl class="kpis"><div><dt>Spiked</dt><dd><b>{{.Dropped}}</b> <small>of {{.Total}}</small></dd></div><div><dt>Noise removed</dt><dd><b>{{.NoisePct}}%</b></dd></div>{{if .Pending}}<div><dt>Waiting</dt><dd><b>{{.Pending}}</b></dd></div>{{end}}</dl>
+<form class="spike-f" action="/spiked" method="get" role="search" hx-get="/spiked" hx-trigger="input changed delay:200ms from:#q, change from:input[name=bucket], submit" hx-target="#spiked-results" hx-swap="outerHTML" hx-push-url="true">
+<fieldset><legend class="sec"><span>Why spiked</span></legend><ul class="buckets">{{range .Buckets}}<li><label class="bucket"><input class="sr-only" type="radio" name="bucket" value="{{.Key}}"{{if .Checked}} checked{{end}}><span>{{.Label}}</span><span class="n">{{.N}}</span>{{if .Key}}<svg viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="100" height="4"/><rect class="fg" width="{{.Width}}" height="4"/></svg>{{end}}</label></li>{{end}}</ul></fieldset>
+<p class="find"><label for="q">Find&gt;</label><input id="q" name="q" type="search" value="{{.Q}}" placeholder="Headline, outlet or reason" autocomplete="off" enterkeyhint="search"><button class="btn" type="submit">Go</button></p>
+</form>
+{{template "results" .Results}}
+{{end}}{{end}}{{end}}
+
+{{define "results"}}<div id="spiked-results"><p class="count" role="status">{{if .Filtered}}{{.N}} {{if eq .N 1}}match{{else}}matches{{end}}{{if .Capped}}, newest 150 shown{{end}}{{end}}</p><ul class="rows">{{range .Rows}}{{if .Day}}<li class="rd"><h3 class="sec"><span>{{.Day}}</span></h3></li>{{else}}<li class="row"><time datetime="{{.Published}}">{{.HM}}</time><a href="{{.URL}}" rel="noopener" target="_blank">{{.Title}}</a><span class="why">{{.Source}} <em>{{.Reason}}</em></span></li>{{end}}{{else}}<li>{{template "empty" (list "Nothing spiked" "No articles match.")}}</li>{{end}}</ul></div>{{end}}
