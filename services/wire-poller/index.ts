@@ -337,7 +337,17 @@ const storyUrl = (it: Item) => `/#s-${it.cluster || it.id}`;
 
 // ---------- main ----------
 async function main() {
-  const state: State = JSON.parse((await readText("state.json")) || "null") ?? { items: [], health: {}, usage: {}, pushes: {} };
+  let raw = await readText("state.json");
+  // Staging only: start from a copy of another environment's state instead of an empty wire. Production never sets this.
+  if (!raw && env.SEED_STATE_URL) {
+    try {
+      const r = await fetch(env.SEED_STATE_URL, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+      const text = r.ok ? await r.text() : "";
+      if (Array.isArray(JSON.parse(text || "null")?.items)) { raw = text; console.log("seeded state.json from", env.SEED_STATE_URL); }
+      else console.error("seed state was not a wire state, starting empty", r.status);
+    } catch (e) { console.error("seed state fetch failed, starting empty", String(e)); }
+  }
+  const state: State = JSON.parse(raw || "null") ?? { items: [], health: {}, usage: {}, pushes: {} };
   state.pushes ??= {};
   const known = new Set(state.items.map((i) => i.url));
   const cutoff = Date.now() - RETAIN_DAYS * 864e5;
