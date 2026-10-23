@@ -34,7 +34,7 @@ jobs:
       - name: Test
         run: go test -race -count=1 ./...
       - name: Build image
-        run: docker build --pull -t wire-futbol:ci .
+        run: docker build --pull -f deploy/Dockerfile -t wire-futbol:ci .
       - name: Image runs as non-root and serves health
         run: |
           test "$(docker image inspect wire-futbol:ci --format '{{.Config.User}}')" = "nonroot:nonroot"

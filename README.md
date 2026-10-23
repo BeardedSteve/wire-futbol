@@ -44,7 +44,7 @@ DEFAULT_CLUB=lfc go run ./cmd/wire serve   # http://localhost:3000
 
 Without `S3_BUCKET` everything is read from and written to `./data` (or `DATA_DIR`). `DEFAULT_CLUB` picks the club for hosts outside wire.futbol, such as localhost or a railway.app domain. To view a copy of production, put its `/api/state.json` at `data/lfc/state.json`.
 
-Container: `docker build -t wire-futbol .` then `docker run -p 3000:3000 -e DEFAULT_CLUB=lfc wire-futbol`.
+Container: `docker build -f deploy/Dockerfile -t wire-futbol .` then `docker run -p 3000:3000 -e DEFAULT_CLUB=lfc wire-futbol`.
 
 ### Environment
 
@@ -87,10 +87,12 @@ A source listed by several clubs is fetched once and its items go to each club's
 |---|---|---|
 | `production` | production | Bun app |
 | `main` | staging | Bun app |
-| `claude/youthful-pascal-r6sggv` | go-staging | Go app |
+| `claude/youthful-pascal-r6sggv` | `wire-futbol-go-staging` project | Go app, built from `deploy/Dockerfile` |
 
 ## CI
 
 `.github/workflows/go.yml`: gofmt, `go vet`, staticcheck, govulncheck, tests with `-race`, container build and a smoke test of the image. Actions are pinned by commit SHA and Dependabot proposes updates for Go modules, actions and base images.
 
 `.github/workflows/ci.yml` still checks the Bun app.
+
+The Dockerfile lives in `deploy/` because Railway builds any root Dockerfile it finds, which would switch the Bun services on `main` to the Go image. Move it to the root at cutover.
