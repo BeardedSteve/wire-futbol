@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p .",
     "web": "bun run services/wire-web/index.ts",
     "wire-poller": "bun run services/wire-poller/index.ts",
-    "squad-poller": "bun run services/squad-poller/index.ts"
+    "squad-poller": "bun run services/squad-poller/index.ts",
+    "design": "bun run design/serve.ts"
   },
   "dependencies": {
     "fast-xml-parser": "4",

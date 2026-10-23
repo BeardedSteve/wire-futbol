@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false
   },
-  "include": ["services/**/*.ts", "lib/**/*.ts", "test/**/*.ts"]
+  "include": ["services/**/*.ts", "lib/**/*.ts", "test/**/*.ts", "design/**/*.ts"]
 }
