@@ -18,7 +18,7 @@
   function setBtn() {
     if (!btn) return;
     btn.classList.toggle("on", !!sub);
-    btn.querySelector(".alerts-l").textContent = sub ? "Alerts on" : "Alerts";
+    btn.querySelector(".alerts-l").textContent = sub ? "ALERTS ON" : "ALERTS";
     btn.setAttribute("aria-label", sub ? "Phone alerts are on" : "Turn on phone alerts");
   }
   function open(html) { body.innerHTML = html; if (!sheet.open) sheet.show(); btn.setAttribute("aria-expanded", "true"); var f = sheet.querySelector("button"); if (f) f.focus(); }

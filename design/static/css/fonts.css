@@ -1,7 +1,2 @@
-/* Self-hosted, latin subset. Big Shoulders Display and Newsreader are variable fonts, so one file covers the weight range. */
-@font-face{font-family:"Big Shoulders Display";font-style:normal;font-weight:700 900;font-display:swap;src:url(/static/fonts/BigShouldersDisplay-var.woff2) format("woff2")}
-@font-face{font-family:"Newsreader";font-style:normal;font-weight:400 700;font-display:swap;src:url(/static/fonts/Newsreader-normal-400-700.woff2) format("woff2")}
-@font-face{font-family:"Newsreader";font-style:italic;font-weight:400 600;font-display:swap;src:url(/static/fonts/Newsreader-italic-400-600.woff2) format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url(/static/fonts/IBMPlexMono-normal-400.woff2) format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url(/static/fonts/IBMPlexMono-normal-500.woff2) format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url(/static/fonts/IBMPlexMono-normal-600.woff2) format("woff2")}
+/* Bedstead by bjh21 (CC0), a faithful teletext typeface. It includes the block mosaic characters used for bars and rules. */
+@font-face{font-family:"Bedstead";font-style:normal;font-weight:400;font-display:swap;src:url(/static/fonts/Bedstead.otf) format("opentype")}

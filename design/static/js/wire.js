@@ -25,13 +25,19 @@
     var t = String(v).padStart(2, "0");
     if (b.textContent !== t) { b.textContent = t; var tile = b.parentNode; tile.classList.remove("flip"); void tile.offsetWidth; tile.classList.add("flip"); }
   }
+  function clock() {
+    var el = document.querySelector("[data-clock]"); if (!el) return;
+    var d = new Date(now());
+    el.innerHTML = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: TZ }) + " <i>" + hm(d) + "/" + String(d.getSeconds()).padStart(2, "0") + "</i>";
+  }
   function tick() {
+    clock();
     document.querySelectorAll("time[data-rel]").forEach(function (t) { t.textContent = rel(t.getAttribute("datetime")); });
     document.querySelectorAll(".clock[data-kickoff]").forEach(function (c) {
       var s = Math.max(0, Math.floor((new Date(c.dataset.kickoff).getTime() - now()) / 1000));
       setTile(c, "d", Math.floor(s / 86400)); setTile(c, "h", Math.floor((s % 86400) / 3600)); setTile(c, "m", Math.floor((s % 3600) / 60)); setTile(c, "s", s % 60);
     });
-    document.querySelectorAll(".ko-big[data-kickoff] [data-elapsed]").forEach(function (e) {
+    document.querySelectorAll(".ko[data-kickoff] [data-elapsed]").forEach(function (e) {
       var m = Math.floor((now() - new Date(e.parentNode.dataset.kickoff).getTime()) / 60000);
       e.textContent = (m > 45 && m < 62 ? "HT" : Math.min(m, 90)) + (m > 45 && m < 62 ? "" : "'");
     });
@@ -46,6 +52,21 @@
       line.hidden = false;
     } else line.hidden = true;
   }
+  // Page entry, like a remote: type three digits anywhere to go to that page. P100 shows what you have typed so far.
+  var typed = "", pgTimer = 0;
+  function pgShow(t, cls) { var p = document.getElementById("pgnum"); if (!p) return; p.textContent = t; p.classList.toggle("typing", !!cls); }
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var tag = (e.target && e.target.tagName) || ""; if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (!/^[0-9]$/.test(e.key)) { if (e.key === "Escape") { typed = ""; pgShow(document.getElementById("pgnum").getAttribute("aria-label").replace("Page ", "P")); } return; }
+    typed += e.key; clearTimeout(pgTimer);
+    pgShow("P" + (typed + "__").slice(0, 3), true);
+    if (typed.length < 3) { pgTimer = setTimeout(function () { typed = ""; pgShow(document.getElementById("pgnum").getAttribute("aria-label").replace("Page ", "P")); }, 4000); return; }
+    var pages = []; try { pages = JSON.parse(document.body.dataset.pages); } catch (x) {}
+    var hit = pages.filter(function (p) { return p[0] === typed; })[0]; typed = "";
+    if (hit) location.assign(hit[1]);
+    else { pgShow("NOPE", true); setTimeout(function () { pgShow(document.getElementById("pgnum").getAttribute("aria-label").replace("Page ", "P")); }, 1200); }
+  });
   function boot() { tick(); markNew(); }
   document.addEventListener("DOMContentLoaded", boot);
   document.addEventListener("htmx:afterSettle", boot);
