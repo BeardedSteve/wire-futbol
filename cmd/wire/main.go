@@ -77,7 +77,15 @@ func main() {
 	}
 }
 
-func openStore() store.Store { return store.FromEnv(os.Getenv, env("DATA_DIR", "./data")) }
+func openStore() store.Store {
+	st := store.FromEnv(os.Getenv, env("DATA_DIR", "./data"))
+	if b, ok := st.(*store.S3); ok {
+		slog.Info("store", "kind", "bucket", "bucket", b.Bucket)
+	} else {
+		slog.Info("store", "kind", "directory", "path", env("DATA_DIR", "./data"))
+	}
+	return st
+}
 
 func vapid() *push.VAPID {
 	pub, priv := os.Getenv("VAPID_PUBLIC_KEY"), os.Getenv("VAPID_PRIVATE_KEY")
