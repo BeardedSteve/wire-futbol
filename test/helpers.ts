@@ -27,7 +27,10 @@ export async function startWeb(env: Record<string, string>): Promise<{ url: stri
     env: { PATH: process.env.PATH!, HOME: process.env.HOME ?? "/tmp", PORT: String(port), ...env },
     stdout: "pipe", stderr: "pipe",
   });
-  for (const s of [proc.stdout, proc.stderr]) (async () => { for await (const c of s) out += new TextDecoder().decode(c); })();
+  for (const s of [proc.stdout, proc.stderr]) (async () => {
+    const r = s.getReader();
+    for (;;) { const { done, value } = await r.read(); if (done) break; out += new TextDecoder().decode(value); }
+  })();
   const url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(url + "/health")).ok) return { url, stop: () => proc.kill(), log: () => out }; } catch {}
