@@ -31,6 +31,7 @@ Image: 22 MB, distroless static, non-root, no shell. Binary 11 MB.
 
 - Pixel comparison of the wire, Kept out and Status pages on the same state file: identical. Shorts: identical apart from the video frame.
 - Kept-out bucket "Not about Liverpool" is generated from the club name.
+- Feed dates with a zone abbreviation Go doesn't know (Sky Sports uses one) fall back to the fetch time, as in the Bun app. Go would otherwise read BST as UTC and show the time an hour out.
 - Tooltip date format on times reads "Thursday 23 October, 14:05" (the Bun app's depends on the ICU version).
 
 ## Open items
@@ -38,5 +39,4 @@ Image: 22 MB, distroless static, non-root, no shell. Binary 11 MB.
 - Gemini key set on staging; first filtered run finished 15:01 UTC on 23 October.
 - Real fixtures for the RSS feeds, liverpoolfc.com and the fixtures page: the poller saves every response under `fixtures/` in the staging bucket (`SAVE_FIXTURES=1`), but this session can't reach those sites or read the bucket keys. They need copying into `testdata/` and wiring into the parser tests.
 - Parity report: due after 15:20 UTC on 24 October (window starts 14:47 UTC on 23 October).
-- Spool: Worker `spool` and KV namespace `spool-seen` still exist on Cloudflare.
 - At cutover: move `deploy/Dockerfile` to the root, copy `state.json` and `subs.json` to `lfc/` keys, and run `wire squad` once (FPL status history starts again; production's Postgres history also only began on 23 October).

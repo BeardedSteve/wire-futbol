@@ -133,3 +133,30 @@ func TestNormURL(t *testing.T) {
 		}
 	}
 }
+
+func TestParseDate(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"Fri, 23 Oct 2026 14:15:00 +0100", "2026-10-23T13:15:00Z"},
+		{"Fri, 23 Oct 2026 13:15:00 GMT", "2026-10-23T13:15:00Z"},
+		{"Fri, 23 Oct 2026 13:15:00 UTC", "2026-10-23T13:15:00Z"},
+		{"2026-10-23T14:15:00+01:00", "2026-10-23T13:15:00Z"},
+		{"2026-10-23T13:15:00Z", "2026-10-23T13:15:00Z"},
+		{"Fri, 23 Oct 2026 14:15:00 BST", ""},
+		{"yesterday", ""},
+	}
+	for _, c := range cases {
+		got, ok := ParseDate(c.in)
+		if c.want == "" {
+			if ok {
+				t.Errorf("ParseDate(%q) = %v, want unparseable", c.in, got)
+			}
+			continue
+		}
+		if !ok || got.Format(time.RFC3339) != c.want {
+			t.Errorf("ParseDate(%q) = %v %v, want %s", c.in, got, ok, c.want)
+		}
+	}
+}
