@@ -1,6 +1,6 @@
 // LFC wire: web front. Renders the wire, the filtered-out log and system status from state.json in the bucket.
 import { S3Client } from "bun";
-import webpush from "web-push@3";
+import webpush from "web-push";
 import { deflateSync } from "node:zlib";
 
 const env = Bun.env;
@@ -94,9 +94,9 @@ async function readSubs(): Promise<Sub[]> {
 }
 async function writeSubs(subs: Sub[]) { if (s3) await s3.write("subs.json", JSON.stringify(subs), { type: "application/json" }); }
 async function sendPush(sub: Sub, payload: object): Promise<number> {
-  webpush.setVapidDetails(env.VAPID_SUBJECT || "https://wire-web-production-7556.up.railway.app", VAPID_PUBLIC, env.VAPID_PRIVATE_KEY);
+  webpush.setVapidDetails(env.VAPID_SUBJECT || "https://wire-web-production-7556.up.railway.app", VAPID_PUBLIC, env.VAPID_PRIVATE_KEY!);
   const d = webpush.generateRequestDetails(sub, JSON.stringify(payload), { TTL: 3600, urgency: "high" });
-  const r = await fetch(d.endpoint, { method: d.method, headers: d.headers, body: d.body, signal: AbortSignal.timeout(15000) });
+  const r = await fetch(d.endpoint, { method: d.method, headers: d.headers, body: d.body as unknown as BodyInit, signal: AbortSignal.timeout(15000) });
   return r.status;
 }
 const validSub = (x: any): x is Sub => x && typeof x.endpoint === "string" && /^https:\/\//.test(x.endpoint) && x.endpoint.length < 1000 && typeof x.keys?.p256dh === "string" && typeof x.keys?.auth === "string";
@@ -945,7 +945,7 @@ Bun.serve({
       return new Response(null, { status: 301, headers: { location: `https://${canon}${path}${url.search}` } });
     if (path === "/manifest.webmanifest") return new Response(MANIFEST, { headers: { "content-type": "application/manifest+json" } });
     if (path === "/sw.js") return new Response(SW_JS, { headers: { "content-type": "text/javascript", "cache-control": "no-cache", "service-worker-allowed": "/" } });
-    if (PNG[path]) return new Response(PNG[path], { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
+    if (PNG[path]) return new Response(PNG[path] as unknown as BodyInit, { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
     if (path.startsWith("/api/push/")) {
       if (path === "/api/push/key") return Response.json({ key: VAPID_PUBLIC });
       if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });

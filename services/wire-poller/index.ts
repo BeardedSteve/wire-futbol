@@ -2,8 +2,8 @@
 // Fetches tier 1 sources only, filters and summarises new items with Gemini Flash (structured outputs),
 // clusters duplicates, pushes material items as web push notifications, writes state.json to a bucket. The web service renders it.
 import { S3Client } from "bun";
-import webpush from "web-push@3";
-import { XMLParser } from "fast-xml-parser@4";
+import webpush from "web-push";
+import { XMLParser } from "fast-xml-parser";
 
 // ---------- config ----------
 const env = Bun.env;
@@ -19,13 +19,13 @@ const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
 const ONLY = (env.SOURCES || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 type Source = { key: string; name: string; kind: "rss" | "lfc"; url: string };
-const SOURCES: Source[] = [
+const SOURCES: Source[] = ([
   { key: "lfc", name: "liverpoolfc.com", kind: "lfc", url: "https://www.liverpoolfc.com/news" },
   { key: "sky", name: "Sky Sports", kind: "rss", url: "https://www.skysports.com/rss/11669" },
   { key: "bbc", name: "BBC Sport", kind: "rss", url: "https://feeds.bbci.co.uk/sport/football/teams/liverpool/rss.xml" },
   { key: "echo", name: "Liverpool Echo", kind: "rss", url: "https://www.liverpoolecho.co.uk/all-about/liverpool-fc?service=rss" },
   { key: "athletic", name: "The Athletic", kind: "rss", url: "https://www.nytimes.com/athletic/rss/football/liverpool/" },
-].filter((s) => ONLY.length === 0 || ONLY.includes(s.key));
+] as Source[]).filter((s) => ONLY.length === 0 || ONLY.includes(s.key));
 
 // ---------- storage: bucket if configured, else local ./data ----------
 // Bun's virtual-hosted mode expects the bucket already in the endpoint host (https://<bucket>.t3.storageapi.dev)
@@ -322,7 +322,7 @@ async function notify(title: string, body: string, url = "/", tag?: string, urge
   for (const sub of subs) {
     try {
       const d = webpush.generateRequestDetails(sub, JSON.stringify({ title, body, url, tag }), { TTL: 6 * 3600, urgency });
-      const r = await fetch(d.endpoint, { method: d.method, headers: d.headers, body: d.body, signal: AbortSignal.timeout(15000) });
+      const r = await fetch(d.endpoint, { method: d.method, headers: d.headers, body: d.body as unknown as BodyInit, signal: AbortSignal.timeout(15000) });
       if (r.status === 404 || r.status === 410) gone.add(sub.endpoint); // device unsubscribed or app removed
       else if (r.status >= 300) console.error("push rejected", r.status, (await r.text()).slice(0, 200));
     } catch (e) { console.error("push failed", String(e)); }
