@@ -18,7 +18,7 @@ Club news wires for wire.futbol. Liverpool runs at lfc.wire.futbol on Railway.
 
 Work goes in a branch and a pull request into `main`. CI must pass before merging. Merging deploys to staging. To release, open a pull request from `main` into `production`.
 
-Staging has its own Postgres and bucket. Its wire-poller runs with `MAX_PUSH_PER_DAY=0` and a low `DAILY_TOKEN_CAP`, so it sends no alerts and spends little on Gemini.
+Staging has its own Postgres and bucket. Its wire-poller runs with `MAX_PUSH_PER_DAY=0` and a low `DAILY_TOKEN_CAP`, so it sends no alerts and spends little on Gemini. On its first run, `SEED_STATE_URL` copies production's public state so staging starts with real stories.
 
 ## Local development
 
