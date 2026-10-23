@@ -47,3 +47,4 @@
 @media (max-height:760px){.sh-body{--tb-h:48px}.sh-head{min-height:44px;padding-top:2px}.sh-h{font-size:20px}.sh-all{min-height:36px}.sh-btn{min-height:46px}.sh-player{gap:8px}.sh-stage{padding-top:6px}}
 .sh-noscript{text-align:center;color:var(--ink-2);padding:24px}
 @media (max-width:520px){.sh-back{display:none}.sh-all span{display:none}.sh-all{padding:0 11px}.sh-h{font-size:24px}}
+@media (max-width:760px){.sh-controls{padding-bottom:12px}.sh-keys{display:none}}
