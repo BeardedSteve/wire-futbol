@@ -8,6 +8,9 @@ Club news wires for wire.futbol. Liverpool runs at lfc.wire.futbol on Railway.
 |---|---|---|
 | `services/wire-web` | Web front: the wire, kept-out log, status, Shorts | Always on |
 | `services/wire-poller` | Reads tier 1 sources, filters with Gemini, sends push alerts, writes `state.json` to the bucket | Every 15 minutes |
+| `services/squad-poller` | Copies the Fantasy Premier League feed (players, fixtures, injury status changes) into Postgres for the squad page | Every 2 hours |
+
+`lib/squad` holds the squad stats and injury logic shared by wire-web and the tests.
 
 ## Branches and environments
 

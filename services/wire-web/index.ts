@@ -1,7 +1,11 @@
-// LFC wire: web front. Renders the wire, the filtered-out log and system status from state.json in the bucket.
-import { S3Client } from "bun";
+// LFC wire: web front. Renders the wire, the filtered-out log and system status from state.json in the bucket,
+// and the squad page from the Postgres tables the squad poller keeps.
+import { S3Client, SQL } from "bun";
 import webpush from "web-push";
 import { deflateSync } from "node:zlib";
+import {
+  Avail, Cell, PoolEntry, SQ_POS, Spell, SqEvent, SqFixture, SqPlayer, SqStat, SqTeam, SquadModel, SquadRow, buildSquad, flagFor, hasLeft, injuryWhat, nameMatcher, percentile, playedByTeam, poolMinutes, spellsFor, statusAt, textMatches,
+} from "../../lib/squad/core.ts";
 
 const env = Bun.env;
 const TZ = "Europe/London";
@@ -156,6 +160,7 @@ const I = {
   undo: `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 3.6 2.5 6.7l3.1 3.1M2.8 6.7h7a3.6 3.6 0 0 1 0 7.2H7.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   checks: `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="m1.2 8.6 3 2.9 5.6-6.3M7.4 10.9l.6.6 6.8-7.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   soundOn: `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 6.1v3.8h2.5L8 12.7V3.3L4.7 6.1Z" fill="currentColor"/><path d="M10.6 5.6a3.3 3.3 0 0 1 0 4.8M12.6 3.7a6 6 0 0 1 0 8.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  squad: `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 2.5 2.2 4.4l1.2 2.7 1.5-.6v7h6.2v-7l1.5.6 1.2-2.7-3.4-1.9a2.4 2.4 0 0 1-4.8 0Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
   soundOff: `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 6.1v3.8h2.5L8 12.7V3.3L4.7 6.1Z" fill="currentColor"/><path d="m10.6 6.1 3.8 3.8m0-3.8-3.8 3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
 };
 
@@ -225,7 +230,7 @@ const FONTS = "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..12
 const FAVICON = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#C8102E"/><text x="32" y="45" font-family="Georgia,serif" font-size="38" font-style="italic" font-weight="700" text-anchor="middle" fill="#fff">W</text></svg>`);
 const MARK = `<a class="mark" href="/" aria-label="LFC Wire, home"><span class="mark-lfc">LFC</span><span class="mark-wire">Wire</span></a>`;
 
-function shell(o: { title: string; active: "wire" | "filtered" | "status"; state: State | null; body: string; rail?: string; top?: string; script?: string }) {
+function shell(o: { title: string; active: "wire" | "filtered" | "status" | "squad"; state: State | null; body: string; rail?: string; top?: string; script?: string; css?: string }) {
   const st = o.state;
   const live = liveness(st);
   const ago = st?.lastRun ? Math.max(0, Math.floor((Date.now() - new Date(st.lastRun).getTime()) / 60000)) : null;
@@ -238,11 +243,12 @@ function shell(o: { title: string; active: "wire" | "filtered" | "status"; state
 <link rel="icon" href="${FAVICON}"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LFC Wire"><meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="${FONTS}">
-<style>${CSS}</style></head><body${o.rail ? ' class="has-rail-page"' : ""}>
+<style>${CSS}${o.css ?? ""}</style></head><body${o.rail ? ' class="has-rail-page"' : ""}>
 <a class="skip" href="#main">Skip to content</a>
 <header class="bar"><div class="bar-in">
   ${MARK}
   <nav class="nav" aria-label="Sections">
+    <a class="navl" href="/squad"${o.active === "squad" ? ' aria-current="page"' : ""}>${I.squad}<span>Squad</span></a>
     <a class="navl" href="/shorts" id="shorts-link">${I.play}<span>Shorts</span><span class="navl-n" id="shorts-n" hidden></span></a>
     <button type="button" class="alerts-btn" id="alerts-btn" hidden aria-haspopup="dialog" aria-expanded="false">${I.bell}<span class="alerts-label">Alerts</span></button>
     <a class="live ${live.tone}" href="/status" title="${esc(live.title)}" aria-label="Wire status: ${esc(live.stale ? "not updating" : live.label)}"${o.active === "status" ? ' aria-current="page"' : ""}><span class="pulse" aria-hidden="true"></span><span class="live-long">${esc(live.stale ? "Not updating" : live.label)}</span><span class="live-short" aria-hidden="true">${esc(short)}</span></a>
@@ -255,7 +261,7 @@ ${o.top ?? ""}
     <main id="main" tabindex="-1">${o.body}</main>
     ${o.rail ? `<aside class="rail" aria-label="Fixtures and wire status">${o.rail}</aside>` : ""}
   </div>
-  <footer class="foot"><p>Reads liverpoolfc.com, BBC Sport, Sky Sports, The Athletic and the Liverpool Echo every 15 minutes. Summaries are machine-written from each outlet's headline and standfirst, so follow the link before relying on detail.</p><p class="foot-links"><a href="/status">Status</a><a href="/filtered">What the filter kept out</a></p></footer>
+  <footer class="foot"><p>Reads liverpoolfc.com, BBC Sport, Sky Sports, The Athletic and the Liverpool Echo every 15 minutes. Summaries are machine-written from each outlet's headline and standfirst, so follow the link before relying on detail.</p><p class="foot-links"><a href="/squad">Squad</a><a href="/status">Status</a><a href="/filtered">What the filter kept out</a></p></footer>
 </div>
 <div class="sheet" id="alerts-sheet" role="dialog" aria-modal="false" aria-labelledby="sheet-h" hidden><div class="sheet-in">
   <p class="sheet-h" id="sheet-h">Phone alerts</p><div id="sheet-body"></div>
@@ -379,7 +385,7 @@ function filteredPage(st: State | null) {
   return shell({ title: "Kept out · LFC Wire", active: "filtered", state: st, body, script: "initFiltered();" });
 }
 
-function statusPage(st: State | null) {
+function statusPage(st: State | null, sq: SquadData | null = null) {
   if (!st) return shell({ title: "Status · LFC Wire", active: "status", state: st, body: emptyState("No data yet", "The wire hasn't completed a run.") });
   const live = liveness(st);
   const failing = SOURCE_NAMES.filter(([k]) => (st.health[k]?.fails ?? 0) > 0);
@@ -400,7 +406,7 @@ function statusPage(st: State | null) {
   const body = `${crumb("Status")}<header class="page-h"><h1>Status</h1><p class="lead status-${live.tone}"><span class="sdot ${live.tone}" aria-hidden="true"></span>${esc(headline)}</p></header>
 <div class="grid2">
 <section class="sec"><h2 class="sec-h">Sources</h2><ul class="srows">${srcRows}</ul></section>
-<section class="sec"><h2 class="sec-h">Schedule and alerts</h2><dl class="facts"><dt>Last run</dt><dd>${timeTag(st.lastRun!)}</dd><dt>Reads sources</dt><dd>Every 15 minutes</dd><dt>Phone alerts</dt><dd>${pushes} of ${MAX_PUSH} today, none between 22:00 and 07:00</dd><dt>Fixtures</dt><dd>${st.fixtures ? `Refreshed ${timeTag(st.fixtures.fetchedAt)}` : "Not loaded yet"}</dd></dl></section>
+<section class="sec"><h2 class="sec-h">Schedule and alerts</h2><dl class="facts"><dt>Last run</dt><dd>${timeTag(st.lastRun!)}</dd><dt>Reads sources</dt><dd>Every 15 minutes</dd><dt>Phone alerts</dt><dd>${pushes} of ${MAX_PUSH} today, none between 22:00 and 07:00</dd><dt>Fixtures</dt><dd>${st.fixtures ? `Refreshed ${timeTag(st.fixtures.fetchedAt)}` : "Not loaded yet"}</dd><dt>Squad data</dt><dd class="${sq?.last && !sq.last.ok ? "bad-text" : ""}">${!sq ? "Not loaded yet" : sq.last && !sq.last.ok ? `Last refresh failed: ${esc(sq.last.error ?? "unknown error")}${sq.lastOk ? `. Last good ${timeTag(sq.lastOk)}` : ""}` : sq.lastOk ? `Refreshed ${timeTag(sq.lastOk)}, every two hours` : "Not loaded yet"}</dd></dl></section>
 <section class="sec"><h2 class="sec-h">Filter</h2>
   <dl class="kpis tight"><div><dt>Cost today</dt><dd>${pence(t).toFixed(2)}p</dd></div><div><dt>Daily average</dt><dd>${avg.toFixed(2)}p</dd></div></dl>
   ${days.length ? spark : ""}
@@ -932,6 +938,211 @@ start();
 })();
 `;
 
+// ---------- squad data: read from Postgres, written by the squad poller ----------
+const db = env.DATABASE_URL ? new SQL({ url: env.DATABASE_URL, max: 3, idleTimeout: 60, connectionTimeout: 5 }) : null;
+const CLUB = env.SQUAD_CLUB || "LIV";
+type SquadData = { model: SquadModel | null; season: string; lastOk: string | null; last: { at: string; ok: boolean; error: string | null } | null };
+let squadCache: { at: number; data: SquadData | null } = { at: 0, data: null };
+let squadInflight: Promise<SquadData | null> | null = null;
+const isoOf = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
+const numOf = (v: unknown) => (v == null ? 0 : Number(v));
+async function loadSquad(): Promise<SquadData | null> {
+  if (!db) return null;
+  if (Date.now() - squadCache.at < 120_000) return squadCache.data;
+  squadInflight ??= (async () => {
+    try {
+      const runs = await db`select at, ok, season, error from fpl_runs order by at desc, id desc limit 200`;
+      const okRun = runs.find((r: any) => r.ok);
+      if (!okRun) { squadCache = { at: Date.now(), data: runs.length ? { model: null, season: "", lastOk: null, last: { at: isoOf(runs[0].at)!, ok: false, error: runs[0].error } } : null }; return squadCache.data; }
+      const season = okRun.season as string;
+      const [players, teams, fixtures, events] = await Promise.all([
+        db`select * from fpl_players where season = ${season}`,
+        db`select id, name, short_name from fpl_teams where season = ${season}`,
+        db`select id, event, kickoff, team_h, team_a, h_score, a_score, finished, appeared_h, appeared_a from fpl_fixtures where season = ${season}`,
+        db`select e.id, e.at, e.status, e.chance, e.news, e.prev_status from fpl_status_events e join fpl_players p using (season, id) join fpl_teams t on t.season = p.season and t.id = p.team where e.season = ${season} and t.short_name = ${CLUB}`,
+      ]);
+      const ps: SqPlayer[] = players.map((r: any) => ({ ...r, xg: numOf(r.xg), xa: numOf(r.xa), xgc: numOf(r.xgc), news: r.news ?? "", news_added: isoOf(r.news_added) }));
+      const fx: SqFixture[] = fixtures.map((r: any) => ({ ...r, kickoff: isoOf(r.kickoff)!, appeared_h: r.appeared_h ? [...r.appeared_h].map(Number) : null, appeared_a: r.appeared_a ? [...r.appeared_a].map(Number) : null }));
+      const evs: SqEvent[] = events.map((r: any) => ({ ...r, at: isoOf(r.at)!, news: r.news ?? "" }));
+      const model = buildSquad({ players: ps, teams: [...teams], fixtures: fx, events: evs, club: CLUB, now: new Date() });
+      squadCache = { at: Date.now(), data: { model, season, lastOk: isoOf(okRun.at), last: { at: isoOf(runs[0].at)!, ok: !!runs[0].ok, error: runs[0].error } } };
+    } catch (e) { console.error("squad read failed", String(e)); squadCache.at = Date.now() - 90_000; } // keep the last good copy, retry in 30 seconds
+    return squadCache.data;
+  })().finally(() => { squadInflight = null; });
+  return squadInflight;
+}
+
+// ---------- squad page ----------
+const Q_BINS = [10, 25, 40, 60, 75, 90]; // percentile edges for the seven colour steps
+const qClass = (pct: number | null) => (pct == null ? "q-na" : `q${Q_BINS.filter((b) => pct >= b).length}`);
+const ordinal = (n: number) => { const r = Math.round(n), t = r % 100, u = r % 10; return `${r}${t >= 11 && t <= 13 ? "th" : u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th"}`; };
+function fmtStat(st: SqStat, v: number | null) {
+  if (v == null) return "";
+  if (st.unit === "pct") return `${Math.round(v)}%`;
+  const s = Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2);
+  return st.key === "finishing" || st.key === "prevented" ? (v > 0 ? `+${s}` : s) : s;
+}
+const shortDate = (iso: string) => fmt(iso, { day: "numeric", month: "short" });
+const AVAIL_LABEL: Record<Avail, string> = { played: "Played", injured: "Injured or doubtful", suspended: "Suspended", out: "Didn't play" };
+
+function squadPage(st: State | null, d: SquadData | null) {
+  const title = "Squad · LFC Wire";
+  const m = d?.model;
+  if (!m) return shell({ title, active: "squad", state: st, body: `${crumb("Squad")}${emptyState("Squad data isn't loaded yet", d?.last?.error ? `Last attempt failed: ${d.last.error}` : "It refreshes every two hours.")}` });
+
+  // Out now: everyone flagged, with the latest fitness story on the wire that names them.
+  const fit = st ? stories(st).filter((s) => s.group === "fitness" && Date.now() - new Date(s.latest).getTime() < 21 * 864e5) : [];
+  const flagged = m.rows.filter((r) => r.flag);
+  const outNow = flagged.map((r) => {
+    const re = nameMatcher(r.p);
+    let story: Story | undefined, item: Item | undefined;
+    for (const s of re ? fit : []) { item = s.items.find((x) => textMatches(re!, `${x.summary ?? ""} ${x.title}`)); if (item) { story = s; break; } }
+    const since = r.current?.start ?? r.p.news_added;
+    return `<li class="out"><span class="out-n">${esc(r.p.web_name)}</span><span class="pill ${r.flag!.tone}">${esc(r.flag!.text)}</span>
+<span class="out-m">${esc(r.what || r.p.news.split(" - ")[0] || "")}${since ? ` · since ${esc(shortDate(since))}` : ""}${r.current ? ` · missed ${r.current.missed}` : ""}</span>
+${story && item ? `<a class="out-s" href="/#s-${esc(story.id)}">${esc(item.summary || item.title)}</a>` : ""}</li>`;
+  }).join("");
+
+  // Availability: one row per player, one column per league match.
+  const head = m.matches.map((f) => `<th scope="col" title="${esc(`${f.home ? "v" : "at"} ${f.opp}, ${shortDate(f.kickoff)}, ${f.home ? `${f.h_score}-${f.a_score}` : `${f.a_score}-${f.h_score}`}`)}"><span>${esc(f.opp)}</span><span class="ha">${f.home ? "H" : "A"}</span></th>`).join("");
+  const availRows = m.rows.filter((r) => r.p.pos !== 1 || r.p.minutes > 0 || r.flag).map((r) => `<tr><th scope="row">${esc(r.p.web_name)}</th>${r.avail.map((a, i) => `<td><span class="av av-${a}" title="${esc(`${m.matches[i].opp}: ${AVAIL_LABEL[a]}`)}"><span class="sr-only">${esc(AVAIL_LABEL[a])}</span></span></td>`).join("")}</tr>`).join("");
+  const legend = (["played", "injured", "suspended", "out"] as Avail[]).map((a) => `<span class="lg"><span class="av av-${a}" aria-hidden="true"></span>${esc(AVAIL_LABEL[a])}</span>`).join("");
+
+  // One heatmap per position.
+  const positions = [1, 2, 3, 4].map((pos) => {
+    const info = SQ_POS[pos], rows = m.rows.filter((r) => r.p.pos === pos);
+    if (!rows.length) return "";
+    const n = m.pools[pos]?.length ?? 0;
+    const hdr = `<div class="hm-row hm-head" aria-hidden="true"><span></span>${info.stats.map((s) => `<span class="hm-h">${esc(s.label)}</span>`).join("")}</div>`;
+    const few = rows.filter((r) => r.p.minutes < 90);
+    const body = rows.filter((r) => r.p.minutes >= 90).map((r) => {
+      const cells = r.cells.map((c) => {
+        const v = fmtStat(c.stat, c.value);
+        const lbl = `${c.stat.label}${c.stat.unit === "p90" ? " per 90" : ""}: ${v || "none"}${c.pct != null ? `, ${ordinal(c.pct)} percentile` : ", not ranked"}`;
+        return `<span class="hm-c ${qClass(c.pct)}" title="${esc(lbl)}" aria-label="${esc(lbl)}"><b>${esc(v)}</b>${c.pct != null ? `<i>${Math.round(c.pct)}</i>` : ""}</span>`;
+      }).join("");
+      const sub = `${r.p.minutes} min`;
+      const mark = r.flag ? `<span class="mk ${r.flag.tone}" role="img" aria-label="${esc(r.flag.text)}" title="${esc(r.flag.text)}"></span>` : "";
+      return `<details class="pr" data-pid="${r.p.id}" data-pos="${pos}"${r.ranked ? "" : ' data-unranked=""'}><summary class="hm-row"><span class="hm-n"><span class="hm-name">${mark}${esc(r.p.web_name)}</span><span class="hm-sub">${sub}</span></span>${cells}</summary><div class="pr-x" aria-live="polite"></div></details>`;
+    }).join("");
+    return `<section class="sec sq-pos" id="pos-${pos}"><h2 class="sec-h">${esc(info.many)}<span class="sec-meta">vs ${n} Premier League ${esc(info.one)}s, ${Math.round(m.threshold)}+ min</span></h2>${hdr}<div class="hm">${body}</div>${few.length ? `<p class="hm-few"><span>Under 90 min</span> ${few.map((r) => `${esc(r.p.web_name)} ${r.p.minutes}${r.flag ? ` <span class="fl ${r.flag.tone}">${esc(r.flag.text)}</span>` : ""}`).join(", ")}</p>` : ""}</section>`;
+  }).join("");
+
+  const scale = `<div class="qscale" aria-hidden="true"><span class="qs-l">Bottom</span>${[0, 1, 2, 3, 4, 5, 6].map((i) => `<span class="qs q${i}"></span>`).join("")}<span class="qs-l">Top</span><span class="qs-l qs-na"><span class="qs q-na"></span>Too few minutes</span></div>`;
+  const data = { club: m.team.short_name, stats: Object.fromEntries([1, 2, 3, 4].map((p) => [p, SQ_POS[p].stats.map((s) => ({ k: s.key, l: s.label, b: s.better, u: s.unit }))])), pools: m.pools,
+    mine: Object.fromEntries(m.rows.map((r) => [r.p.id, { n: r.p.web_name, v: r.cells.map((c) => (c.value == null ? null : Math.round(c.value * 1000) / 1000)), p: r.cells.map((c) => (c.pct == null ? null : Math.round(c.pct))), r: r.ranked }])) };
+  const body = `${crumb("Squad")}<header class="page-h"><h1>Squad</h1><p class="sq-meta">Premier League ${esc(d!.season)} · ${m.played} matches · per 90 minutes${d!.lastOk ? ` · ${timeTag(d!.lastOk)}` : ""}</p></header>
+${outNow ? `<section class="sec"><h2 class="sec-h">Out now</h2><ul class="outs">${outNow}</ul></section>` : ""}
+${scale}
+${positions}
+${m.matches.length ? `<section class="sec"><h2 class="sec-h">Availability</h2><div class="avl" role="group" aria-label="Availability by match">${legend}</div><div class="avt-wrap"><table class="avt"><thead><tr><th scope="col"><span class="sr-only">Player</span></th>${head}</tr></thead><tbody>${availRows}</tbody></table></div></section>` : ""}
+${m.away.length ? `<p class="sq-away"><span>Left or on loan</span> ${m.away.map((p) => esc(p.web_name)).join(", ")}</p>` : ""}
+<script type="application/json" id="sq-data">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`;
+  return shell({ title, active: "squad", state: st, body, css: SQUAD_CSS, script: SQUAD_JS + "initSquad();" });
+}
+
+const SQUAD_CSS = `
+.sq-meta{margin:0;font-size:13.5px;color:var(--ink-3)}
+.sec-meta{display:block;font:400 12.5px/1.3 var(--sans);font-variation-settings:"wdth" 100;color:var(--ink-3);margin-top:3px}
+.sq-pos,.sq-pos+section{margin-top:26px}
+.outs{list-style:none;margin:0;padding:0}
+.out{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule)}
+.out-n{font-weight:700}.out-m,.out-s{grid-column:1/-1;font-size:13px;color:var(--ink-3)}
+.out-s{color:var(--ink-2);text-underline-offset:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pill{justify-self:start;font:700 11.5px/1 var(--sans);padding:4px 7px;border-radius:999px;background:var(--st-serious);color:#111820}
+.pill.warn,.fl.warn{background:var(--st-warn)}
+.fl{font-weight:700;color:#111820;background:var(--st-serious);border-radius:3px;padding:1px 4px;font-size:11px}
+:root{--q0:#b8501f;--q1:#c4714e;--q2:#d0947a;--q3:#e2e0db;--q4:#7999c4;--q5:#4b7ab8;--q6:#1c5cab;--q0t:#fff;--q1t:#111820;--q2t:#111820;--q3t:#111820;--q4t:#111820;--q5t:#fff;--q6t:#fff;
+--st-serious:#ec835a;--st-warn:#fab219;--av-played:var(--ink-2)}
+@media (prefers-color-scheme:dark){:root{--q0:#e07a45;--q1:#b76c47;--q2:#976047;--q3:#30363c;--q4:#4b729f;--q5:#5384bf;--q6:#5c9ce8;--q0t:#0E1215;--q1t:#0E1215;--q2t:#E9EDF0;--q3t:#E9EDF0;--q4t:#E9EDF0;--q5t:#0E1215;--q6t:#0E1215;--av-played:var(--ink-2)}}
+.q0{background:var(--q0);color:var(--q0t)}.q1{background:var(--q1);color:var(--q1t)}.q2{background:var(--q2);color:var(--q2t)}.q3{background:var(--q3);color:var(--q3t)}
+.q4{background:var(--q4);color:var(--q4t)}.q5{background:var(--q5);color:var(--q5t)}.q6{background:var(--q6);color:var(--q6t)}
+.q-na{background:repeating-linear-gradient(135deg,transparent 0 4px,color-mix(in srgb,var(--ink) 9%,transparent) 4px 5px);color:var(--ink-3);box-shadow:inset 0 0 0 1px var(--rule)}
+.qscale{display:flex;align-items:center;gap:2px;flex-wrap:wrap;margin:6px 0 0;font-size:12px;color:var(--ink-3)}
+.qs{width:18px;height:12px;border-radius:2px;display:inline-block}.qs-l{margin:0 6px}.qs-l:first-child{margin-left:0}.qs-na{display:inline-flex;align-items:center;gap:6px;margin-left:14px}
+.hm-row{display:grid;grid-template-columns:minmax(0,1fr) repeat(5,50px);gap:2px;align-items:stretch}
+@media (min-width:560px){.hm-row{grid-template-columns:minmax(0,1fr) repeat(5,64px)}}
+@media (min-width:860px){.hm-row{grid-template-columns:minmax(0,220px) repeat(5,minmax(0,1fr))}}
+.hm-head{padding:2px 0 6px}.hm-h{font:600 11.5px/1.15 var(--sans);font-variation-settings:"wdth" 75;color:var(--ink-2);text-align:center;align-self:end;white-space:normal}
+@media (min-width:560px){.hm-h{font-size:12.5px;font-variation-settings:"wdth" 90}}
+.pr{border-top:2px solid transparent}
+.pr>summary{list-style:none;cursor:pointer;padding:0;min-height:44px}.pr>summary::-webkit-details-marker{display:none}
+.pr>summary:hover .hm-name{text-decoration:underline;text-underline-offset:3px}
+.hm-n{display:flex;flex-direction:column;justify-content:center;min-width:0;padding:4px 6px 4px 0}
+.hm-name{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-sub{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-c{display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:3px;min-height:44px;font-variant-numeric:tabular-nums;line-height:1.1}
+.hm-c b{font-size:13.5px;font-weight:700}.hm-c i{font-style:normal;font-size:10.5px;opacity:.85}
+.mk{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--st-serious);margin-right:6px;vertical-align:1px}.mk.warn{background:var(--st-warn)}
+.hm-few{margin:8px 0 0;font-size:13px;color:var(--ink-3);line-height:1.7}.hm-few>span:first-child{font-weight:600;color:var(--ink-2);margin-right:4px}
+.pr[open]>summary .hm-name{font-weight:800}
+.pr-x{padding:8px 0 14px}
+.strip{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;margin:0 0 10px}
+.strip-h{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--ink-3)}.strip-h b{color:var(--ink);font-weight:700}
+.strip svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y}
+.strip .dot{fill:var(--ink-3);opacity:.32}.strip .mate{fill:var(--ink-2);opacity:.85}.strip .me{fill:var(--ink);stroke:var(--paper);stroke-width:2}.strip .med{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:2 2}
+.strip .ax{font:500 10px var(--sans);fill:var(--ink-3)}
+.tip{position:fixed;z-index:60;pointer-events:none;background:var(--ink);color:var(--paper);font:500 12.5px/1.3 var(--sans);padding:6px 8px;border-radius:6px;box-shadow:var(--shadow);white-space:nowrap}
+.avl{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink-3);margin:0 0 8px}.lg{display:inline-flex;align-items:center;gap:6px}
+.avt-wrap{overflow-x:auto;margin:0 -16px;padding:0 16px}
+.avt{border-collapse:separate;border-spacing:2px;font-size:13px}
+.avt th{font-weight:600;text-align:left;white-space:nowrap}
+.avt thead th{font:600 10.5px/1.15 var(--sans);color:var(--ink-3);text-align:center;vertical-align:bottom;min-width:22px}.avt thead th span{display:block}.avt .ha{font-weight:400}
+.avt tbody th{position:sticky;left:0;background:var(--paper);padding-right:8px;font-weight:500;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.avt td{padding:0}
+.av{display:inline-block;width:20px;height:20px;border-radius:3px;vertical-align:middle}
+.lg .av{width:12px;height:12px}
+.av-played{background:var(--av-played)}.av-injured{background:var(--st-serious)}.av-suspended{background:var(--st-warn)}.av-out{box-shadow:inset 0 0 0 1px var(--rule-2)}
+.sq-away{margin:22px 0 0;font-size:13px;color:var(--ink-3)}.sq-away span{font-weight:600;color:var(--ink-2);margin-right:4px}
+`;
+
+// Strip plots: every ranked player at the position as a dot, this player on top. Right is always better.
+const SQUAD_JS = `
+function initSquad(){
+ var el=document.getElementById('sq-data');if(!el)return;var D=JSON.parse(el.textContent);
+ var tip=document.createElement('div');tip.className='tip';tip.hidden=true;document.body.appendChild(tip);
+ function f(v,s){if(v==null)return '';if(s.u==='pct')return Math.round(v)+'%';var t=Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);return (s.k==='finishing'||s.k==='prevented')&&v>0?'+'+t:t}
+ function ord(n){var t=n%100,u=n%10;return n+(t>=11&&t<=13?'th':u===1?'st':u===2?'nd':u===3?'rd':'th')}
+ var NS='http://www.w3.org/2000/svg';
+ function mk(tag,a){var e=document.createElementNS(NS,tag);for(var k in a)e.setAttribute(k,a[k]);return e}
+ function draw(box,pos,pid){
+  var stats=D.stats[pos],pool=D.pools[pos]||[],me=D.mine[pid];if(!me)return;box.innerHTML='';
+  stats.forEach(function(s,i){
+   var vals=pool.map(function(p){return p.v[i]}).filter(function(v){return v!=null}).sort(function(a,b){return a-b});
+   var mv=me.v[i];if(!vals.length&&mv==null)return;
+   var lo=vals.length?vals[Math.floor(vals.length*0.02)]:mv,hi=vals.length?vals[Math.ceil(vals.length*0.98)-1]:mv;
+   if(mv!=null){lo=Math.min(lo,mv);hi=Math.max(hi,mv)}if(hi===lo){hi=lo+1}
+   var W=Math.max(200,box.clientWidth||320),H=34,pad=8,flip=s.b==='low';
+   function x(v){var c=Math.max(lo,Math.min(hi,v)),t=(c-lo)/(hi-lo);return pad+(flip?1-t:t)*(W-2*pad)}
+   var wrap=document.createElement('div');wrap.className='strip';
+   var h=document.createElement('div');h.className='strip-h';
+   var rank=me.r&&mv!=null?vals.filter(function(v){return flip?v<mv-1e-9:v>mv+1e-9}).length+1:null;
+   var ties=rank!=null?vals.filter(function(v){return Math.abs(v-mv)<=1e-9}).length:0;
+   h.innerHTML='<span>'+s.l+(s.u==='p90'?' per 90':'')+'</span><span><b>'+f(mv,s)+'</b>'+(rank!=null?' · '+(ties>1?'joint ':'')+ord(rank)+' of '+vals.length:' · not ranked')+'</span>';
+   var svg=mk('svg',{viewBox:'0 0 '+W+' '+(H+12),width:W,height:H+12,role:'img','aria-label':s.l+': '+me.n+' '+f(mv,s)+(me.p[i]!=null?', '+ord(me.p[i])+' percentile':'')});
+   var med=vals.length?vals[Math.floor(vals.length/2)]:null;
+   if(med!=null)svg.appendChild(mk('line',{'class':'med',x1:x(med),x2:x(med),y1:4,y2:H-4}));
+   [[lo,flip?'end':'start'],[hi,flip?'start':'end']].forEach(function(e){var t=mk('text',{x:x(e[0]),y:H+10,'class':'ax','text-anchor':e[1]});t.textContent=f(e[0],s);svg.appendChild(t)});
+   var pts=[];
+   pool.forEach(function(p,j){var v=p.v[i];if(v==null)return;var mate=p.t===D.club;var y=6+((j*7919)%97)/97*(H-12);
+    var c=mk('circle',{cx:x(v),cy:y,r:mate?3.2:2.6,'class':mate?'dot mate':'dot'});svg.appendChild(c);pts.push({x:x(v),y:y,n:p.n,t:p.t,v:v})});
+   if(mv!=null)svg.appendChild(mk('circle',{cx:x(mv),cy:H/2,r:6,'class':'me'}));
+   function show(e){var r=svg.getBoundingClientRect(),sx=W/r.width,sy=(H+12)/r.height,px=(e.clientX-r.left)*sx,py=(e.clientY-r.top)*sy,best=null,bd=1e9;
+    pts.forEach(function(p){var d=Math.pow((p.x-px)/sx,2)+Math.pow((p.y-py)/sy,2);if(d<bd){bd=d;best=p}});
+    if(!best||bd>18*18){tip.hidden=true;return}
+    tip.textContent=best.n+' ('+best.t+') '+f(best.v,s);tip.hidden=false;
+    var tx=Math.min(window.innerWidth-tip.offsetWidth-8,Math.max(8,e.clientX-tip.offsetWidth/2));tip.style.left=tx+'px';tip.style.top=(e.clientY-40)+'px'}
+   svg.addEventListener('pointermove',show);svg.addEventListener('pointerdown',show);svg.addEventListener('pointerleave',function(){tip.hidden=true});
+   wrap.appendChild(h);wrap.appendChild(svg);box.appendChild(wrap)});
+ }
+ document.querySelectorAll('details.pr').forEach(function(d){d.addEventListener('toggle',function(){if(d.open){var b=d.querySelector('.pr-x');if(!b.firstChild)draw(b,d.dataset.pos,d.dataset.pid)}})});
+ document.addEventListener('scroll',function(){tip.hidden=true},{passive:true});
+}
+`;
+
+// The squad tables must never hold up the wire: give up after four seconds and render without them.
+const squadOrTimeout = () => Promise.race([loadSquad().catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 4000))]);
+
 // ---------- server ----------
 const html = (b: string) => new Response(b, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" } });
 Bun.serve({
@@ -941,7 +1152,7 @@ Bun.serve({
     if (path === "/health") return new Response("ok");
     // Send page views on the old railway.app address to the canonical domain. Service worker, icons and push API stay put so existing installs keep working.
     const canon = env.CANONICAL_HOST, host = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "").split(":")[0];
-    if (canon && host && host !== canon && host.endsWith(".up.railway.app") && req.method === "GET" && (path === "/" || path === "/filtered" || path === "/status" || path === "/shorts"))
+    if (canon && host && host !== canon && host.endsWith(".up.railway.app") && req.method === "GET" && (path === "/" || path === "/filtered" || path === "/status" || path === "/shorts" || path === "/squad"))
       return new Response(null, { status: 301, headers: { location: `https://${canon}${path}${url.search}` } });
     if (path === "/manifest.webmanifest") return new Response(MANIFEST, { headers: { "content-type": "application/manifest+json" } });
     if (path === "/sw.js") return new Response(SW_JS, { headers: { "content-type": "text/javascript", "cache-control": "no-cache", "service-worker-allowed": "/" } });
@@ -982,7 +1193,8 @@ Bun.serve({
     try {
       if (path === "/") return html(wirePage(st));
       if (path === "/filtered") return html(filteredPage(st));
-      if (path === "/status") return html(statusPage(st));
+      if (path === "/status") return html(statusPage(st, await squadOrTimeout()));
+      if (path === "/squad") return html(squadPage(st, await squadOrTimeout()));
       if (path === "/api/version") return Response.json({ lastRun: st?.lastRun ?? null, stories: st ? stories(st).length : 0 }, { headers: { "cache-control": "no-store" } });
       if (path === "/api/state.json") return new Response(cached.raw || "null", { headers: { "content-type": "application/json", "cache-control": "no-store" } });
     } catch (e) { console.error("render failed", path, String(e)); return new Response("Something went wrong rendering this page.", { status: 500 }); }
