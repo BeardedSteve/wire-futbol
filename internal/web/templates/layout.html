@@ -36,7 +36,7 @@
   </div>
   <footer class="foot"><p>Reads {{.Club.ReadsLine}} every 15 minutes. Opinion, rumour and clickbait are <a href="/spiked">spiked</a>.</p><p class="n">Summaries are machine-written from each outlet's headline and standfirst. They can be wrong. Follow the link before relying on detail.</p></footer>
 </div>
-<nav class="tabbar" aria-label="Sections">{{range $i, $l := .Nav}}{{if lt $i 4}}<a href="{{.URL}}"{{if eq .Key "shorts"}} hx-boost="false"{{end}}{{if .Current}} aria-current="page"{{end}}><span>{{.Label}}{{if eq .Key "shorts"}}<span class="unseen" data-shorts-n hidden></span>{{end}}</span><b>{{.No}}</b></a>{{end}}{{end}}</nav>
+{{template "tabbar" .}}
 <dialog class="sheet" id="alerts-sheet" aria-labelledby="sheet-h"><p class="sheet-h" id="sheet-h">Phone alerts</p><div id="sheet-body"></div></dialog>
 </body></html>{{end}}
 
@@ -49,3 +49,5 @@
 {{define "pos"}}<div class="pos"><b>{{.Pos}}</b><span>{{.Ord}}, {{.Pts}} pts<br>{{.Played}} played, GD {{.GD}}</span></div>{{if .Form}}<p class="form"><span class="l">Form</span>{{range .Form}}<span class="r {{.Res}}" title="{{.Title}}">{{.Res}}</span>{{end}}<span class="sr-only">, oldest first</span></p>{{end}}{{end}}
 
 {{define "league"}}<table class="lg"><tbody>{{range .}}<tr{{if .Me}} class="me"{{end}}><td>{{.Pos}}</td><td><abbr title="{{.Name}}">{{.Short}}</abbr></td><td>{{.P}}</td><td>{{.GD}}</td><td>{{.Pts}}</td></tr>{{end}}</tbody></table>{{end}}
+
+{{define "tabbar"}}<nav class="tabbar" aria-label="Sections">{{range $i, $l := .Nav}}{{if lt $i 4}}<a href="{{.URL}}"{{if eq .Key "shorts"}} hx-boost="false"{{end}}{{if .Current}} aria-current="page"{{end}}><span>{{.Label}}{{if and (eq .Key "shorts") (not .Current)}}<span class="unseen" data-shorts-n hidden></span>{{end}}</span><b>{{.No}}</b></a>{{end}}{{end}}</nav>{{end}}
