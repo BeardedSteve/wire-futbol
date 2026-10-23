@@ -79,3 +79,20 @@ func drawIcon(size int, accent string) []byte {
 	png.Encode(&buf, img)
 	return buf.Bytes()
 }
+
+// onColour picks white or ink for text on a background colour, by WCAG contrast.
+func onColour(bg string) string {
+	r, g, b := hexRGB(bg)
+	lin := func(c uint8) float64 {
+		v := float64(c) / 255
+		if v <= 0.04045 {
+			return v / 12.92
+		}
+		return math.Pow((v+0.055)/1.055, 2.4)
+	}
+	l := 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
+	if (1.05)/(l+0.05) >= (l+0.05)/(0.0083+0.05) { // 0.0083 is the luminance of the ink, #14110e
+		return "#fff"
+	}
+	return "#14110e"
+}
