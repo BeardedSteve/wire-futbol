@@ -15,24 +15,26 @@ Each visit is one of four questions. The page answers them in this order.
 
 Supporting questions have their own pages: fixtures, league position and form (300), treatment room (200), source health (500).
 
-## Voice: a 1980s teletext service
+## Voice: a working drawing with a teletext heart
 
-Black screen, 40 columns, seven colours, the Bedstead teletext typeface (CC0, self-hosted), double-height headings, numbered pages and four coloured fast-text keys. It is a tribute to the style, not a copy of any broadcaster's service, and uses no BBC names or logos. The product is called LFC Wire.
+Between a newsprint front page and a 1980s teletext service. Newsreader serif headlines on warm paper with a faint drawing-pad grid. Teletext's numbered pages, Bedstead mono labels and signal colours, used where they carry meaning. One dark instrument panel, the board, for the thing that is live. Dark mode inverts the paper.
 
-- **Page numbers.** 100 Wire, 110 to 140 the Fitness, Transfers, Results and Club desks, 200 Squad, 300 Fixtures and table, 400 Spiked, 500 Status, 600 Shorts. Type three digits anywhere to jump (header shows `P2__` as you type). `PAGES` in `render.ts` is the table.
-- **Fast-text keys.** Red Wire, green Squad, yellow Table, cyan Spiked, fixed at the bottom of every screen.
-- **Colour has a job.** Yellow headlines are major stories. Red is out or injured. Yellow is doubtful. Cyan is times and labels. Magenta is categories. Green is confirmed and healthy. "Awaiting club" flashes yellow.
-- **Provenance.** Five blocks per story, one per outlet, the club's in red. "CLUB CONFIRMED" in green.
-- **Squad.** Percentile cells use the six teletext colours, red through magenta, yellow and white to cyan and green. The number is always printed.
-- **Double height** is a CSS `scaleY(2)` on single-line headings only. Wrapped text stays single height.
-- Scanlines are a faint overlay and switch off with reduced motion. Always dark, on purpose.
-- Sizes are in character cells. The font size is chosen so 42 columns fill a phone (390px gives 40 columns of text). From 900px it is a fixed 24px column, centred.
+Why it looks like this: it is built around someone who writes plain and short, does engineering for a living, and wants to know how sure we are. That is an inference from the brief, so change it freely.
+
+- **Title block** instead of a masthead: page number, revision (a live clock), date, system status. Page numbers still work. Type three digits anywhere to jump (100 Wire, 110 to 140 desks, 200 Squad, 300 Table, 400 Spiked, 500 Status, 600 Shorts).
+- **Stated confidence on every story.** `Confirmed by the club, plus 2 outlets`, `Unconfirmed: 1 outlet, club silent` (amber), or `Reported by 2 outlets`. The five outlet blocks stay, the club's in red. Nothing implies more certainty than we have.
+- **Signal colours mean status only.** Green is confirmed or healthy, amber is unconfirmed or doubtful, red is out or major. Club red is also the one brand colour, so it is used for page rules and the next-match panel, not for decoration.
+- **T-minus.** The countdown reads "T-minus to kick-off", then "T+57" once the match is on. It is a small nod and it is a real unit.
+- **Squad as a data sheet.** Each stat is a value with a bullet bar to the percentile, and a six-step bar colour from red to green. The number is always printed. Player rows open to a server-drawn spread of the division.
+- **Spiked** is the reject log, with the reason and a count. Search and filter are form fields.
+- **Copy.** Short sentences, UK English, no filler.
+- Four coloured keys on the phone tab bar are the fast-text nod, with the page number under each.
 
 ## Theming and layout
 
-One club per deployment. `<html data-club="lfc">` sets `--club`, which colours the title band and the "next up" tag. Two demo clubs are at the top of `static/css/wire.css`.
+One club per deployment. `<html data-club="lfc">` sets `--club`. Two demo clubs are at the top of `static/css/wire.css`.
 
-One column on every screen size, so a phone and a desktop see the same page. There is no sidebar: fixtures, standing and treatment room moved to their own numbered pages (300, 200).
+Phones: title block, board, feed, then the rail panels are reached through the tab bar pages. From 980px the rail (fixtures, standing, treatment room, sources) sits beside the feed and sticks.
 
 ## htmx contract
 
@@ -72,15 +74,15 @@ Phase logic (`phase()`): live from kick-off to 2.5 hours after, matchday on the 
 ## Not done
 
 - **Shorts** keeps its current player and gets only the new masthead and tokens. The page here is a placeholder.
-- **Contrast.** The pure teletext colours are very bright on black. If that is too harsh, soften them in the `:root` tokens.
+- **The board** uses the pure teletext colours on black on purpose. Soften `--tk-*` if they are too bright.
 - **Live score** is not shown during a match because the wire has no score feed. The board shows elapsed time and a link to the club's match centre. A score slot exists in the full-time variant.
 - **Squad injury history** in the harness is one event per flagged player, so "missed N matches" is approximate. The service has the full status log.
 - The league table is computed from FPL fixtures, so it covers league matches only.
-- Untested in Safari and Firefox. Checked in Chromium at 390px and 1100px.
+- Untested in Safari and Firefox. Checked in Chromium at 390px and 1280px, light and dark.
 
 ## Files
 
-- `static/css/wire.css`, `fonts.css`: the design system. `static/fonts/Bedstead.otf` is CC0 (see its licence file).
+- `static/css/wire.css`, `fonts.css`: the design system. `static/fonts/Bedstead.otf` is CC0 (licence file alongside). Newsreader is OFL.
 - `static/js/wire.js`, `push.js`, `sw.js`, `htmx.min.js` (2.0.4).
 - `render.ts`, `data.ts`, `serve.ts`: harness only. Replace `data.ts` and `serve.ts` with the Go handlers.
 - `screens/`: reference captures.

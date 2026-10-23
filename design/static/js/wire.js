@@ -28,7 +28,7 @@
   function clock() {
     var el = document.querySelector("[data-clock]"); if (!el) return;
     var d = new Date(now());
-    el.innerHTML = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: TZ }) + " <i>" + hm(d) + "/" + String(d.getSeconds()).padStart(2, "0") + "</i>";
+    el.textContent = hm(d) + "/" + String(d.getSeconds()).padStart(2, "0");
   }
   function tick() {
     clock();

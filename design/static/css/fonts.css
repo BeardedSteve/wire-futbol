@@ -1,2 +1,4 @@
-/* Bedstead by bjh21 (CC0), a faithful teletext typeface. It includes the block mosaic characters used for bars and rules. */
-@font-face{font-family:"Bedstead";font-style:normal;font-weight:400;font-display:swap;src:url(/static/fonts/Bedstead.otf) format("opentype")}
+/* Bedstead (CC0) for page numbers, times and labels. Newsreader (OFL, variable weight and optical size) for headlines and copy. */
+@font-face{font-family:"Bedstead";font-weight:400;font-display:swap;src:url(/static/fonts/Bedstead.otf) format("opentype")}
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:400 700;font-display:swap;src:url(/static/fonts/Newsreader-normal.woff2) format("woff2")}
+@font-face{font-family:"Newsreader";font-style:italic;font-weight:400 600;font-display:swap;src:url(/static/fonts/Newsreader-italic.woff2) format("woff2")}
