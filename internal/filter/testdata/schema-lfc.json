@@ -1,0 +1,99 @@
+{
+ "type": "object",
+ "properties": {
+  "results": {
+   "type": "array",
+   "minItems": 2,
+   "maxItems": 2,
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "enum": [
+       "aaa",
+       "bbb"
+      ],
+      "description": "The input item's id."
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "kept",
+       "dropped"
+      ]
+     },
+     "category": {
+      "type": "string",
+      "enum": [
+       "injury",
+       "team-news",
+       "result",
+       "transfer",
+       "contract",
+       "staff",
+       "business",
+       "regulation",
+       "other",
+       "none"
+      ],
+      "description": "For kept items the news category; for dropped items use none."
+     },
+     "summary": {
+      "type": "string",
+      "description": "Kept: one or two factual sentences, UK English, stating the news first and attributing it at the end. Dropped: empty string."
+     },
+     "reason": {
+      "type": "string",
+      "description": "Dropped: 3 to 6 word reason. Kept: empty string."
+     },
+     "material": {
+      "type": "boolean",
+      "description": "True only if worth a phone notification. Always false for dropped items."
+     },
+     "drop_kind": {
+      "type": "string",
+      "enum": [
+       "opinion",
+       "reaction",
+       "preview",
+       "rumour",
+       "feature",
+       "promo",
+       "off-topic",
+       "thin",
+       "other",
+       "none"
+      ],
+      "description": "Dropped: opinion (analysis, columns, predictions), reaction (quotes or social chatter with no new fact), preview (match previews, listings, how to watch), rumour (relayed from other outlets or unnamed sources), feature (history, interviews, nostalgia), promo (tickets, retail, FPL, video, podcasts), off-topic (not about Liverpool), thin (vague, duplicate, live blog), other. Kept: none."
+     },
+     "cluster": {
+      "type": "string",
+      "enum": [
+       "new",
+       "xxx",
+       "aaa",
+       "bbb"
+      ],
+      "description": "Id of the RECENT STORY or other NEW ITEM reporting the same story, else new."
+     }
+    },
+    "required": [
+     "id",
+     "status",
+     "category",
+     "summary",
+     "reason",
+     "material",
+     "drop_kind",
+     "cluster"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ "required": [
+  "results"
+ ],
+ "additionalProperties": false
+}
