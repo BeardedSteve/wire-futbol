@@ -1,0 +1,26 @@
+{{define "top"}}{{if .Data}}{{with .Data.Next}}<div class="fx-strip{{if .Live}} is-live{{end}}"><a class="fx-in" href="{{.URL}}" rel="noopener" target="_blank">
+  <span class="fx-main"><span class="fx-teams"><span class="{{if .HomeUs}}us{{end}}">{{.Home}}</span> <span class="v">v</span> <span class="{{if .AwayUs}}us{{end}}">{{.Away}}</span></span><span class="fx-meta">{{.When}}{{if .Competition}}, {{.Competition}}{{end}}</span></span>
+  <span class="fx-until" data-kickoff="{{.Start}}">{{.Until}}</span>
+  <span class="sr-only">{{.Spoken}}</span>
+</a></div>{{end}}{{end}}{{end}}
+
+{{define "main"}}{{if not .Data}}{{template "empty" (list "Starting up" "The first run hasn't finished yet. The wire reads its sources every 15 minutes.")}}{{else}}{{with .Data}}<h1 class="sr-only">{{$.Club.Name}} news</h1>
+<div class="list-head">{{if .Chips}}<div class="chips" role="toolbar" aria-label="Show stories about">{{range .Chips}}<button type="button" class="chip" data-filter="{{.Key}}" aria-pressed="{{.Pressed}}">{{.Label}}<span class="n">{{.N}}</span></button>{{end}}</div>{{end}}</div>
+<div class="newline" id="newline" hidden></div>
+<div class="feed{{if not .Chips}} has-no-chips{{end}}" id="feed">{{range .Days}}<section class="day"><h2 class="day-h">{{.Label}}</h2><div class="day-list">{{range .Stories}}{{template "story" .}}{{end}}</div></section>{{else}}{{template "empty" (list "Nothing yet" "No news in the last few days. New stories appear here as they break.")}}{{end}}</div>
+<div class="empty-filter" id="empty-filter" hidden>{{template "empty" (list "Nothing here right now" "Choose All to see every story.")}}</div>{{end}}{{end}}{{end}}
+
+{{define "story"}}<article class="story{{if .Material}} is-material{{end}}" data-group="{{.Group}}" data-fetched="{{.Fetched}}" id="s-{{.ID}}">
+  <div class="st"><time datetime="{{.Latest}}" title="{{.When}}">{{.HM}}</time><span class="new-badge" hidden>New</span></div>
+  <div class="sb">
+    <h3 class="summary">{{.Headline}}</h3>
+    <div class="meta"><span class="cat">{{.Label}}</span>{{if .Material}}<span class="mat">{{if .Pushed}}{{icon "bell"}}Alert sent{{else}}Major{{end}}</span>{{end}}<span class="srcs">{{range .Outlets}}{{if .Club}}<a class="src club" href="{{.URL}}" rel="noopener" target="_blank" title="{{.Title}}">{{icon "tick"}}Club</a>{{else}}<a class="src" href="{{.URL}}" rel="noopener" target="_blank" title="{{.Title}}">{{.Name}}</a>{{end}}{{end}}</span>{{if gt (len .Reports) 1}}<details class="reports"><summary><span class="r-open">{{len .Reports}} reports</span><span class="r-close">Hide reports</span></summary><ol>{{range .Reports}}<li{{if .Lead}} class="is-lead"{{end}}><p>{{.Summary}}</p><div class="rep-meta"><a href="{{.URL}}" rel="noopener" target="_blank">{{.Source}}{{icon "ext"}}</a>{{.Time}}</div></li>{{end}}</ol></details>{{end}}</div>
+  </div>
+</article>{{end}}
+
+{{define "rail"}}{{with .Data}}{{if .Fixtures}}<section class="rail-sec"><h2 class="rail-h">Fixtures</h2><ol class="fx-list">{{range $i, $f := .Fixtures}}<li{{if eq $i 0}} class="is-next"{{end}}><a href="{{.URL}}" rel="noopener" target="_blank"><span class="fx-d">{{.Day}}</span><span class="fx-o">{{if not .HomeUs}}<span class="at">at </span>{{end}}{{.Opponent}}</span><span class="fx-c">{{.Competition}}{{if eq $i 0}}, <span data-kickoff="{{.Start}}">{{.Until}}</span>{{end}}</span></a></li>{{end}}</ol></section>{{end}}
+<section class="rail-sec"><h2 class="rail-h">The wire</h2><dl class="mini">
+  <div><dt>Sources</dt><dd><span class="sdot {{if .AllHealthy}}ok{{else}}warn{{end}}" aria-hidden="true"></span>{{.Healthy}} of {{.SourceCount}} healthy</dd></div>
+  <div><dt>Last read</dt><dd>{{if .LastRead}}{{.LastRead}}{{else}}Not yet{{end}}</dd></div>
+  <div><dt>Filtered</dt><dd>{{.Kept}} kept, {{.Dropped}} kept out</dd></div>
+</dl><p class="rail-links"><a href="/status">Status</a><a href="/filtered">Kept out</a></p>{{if $.Live.Backlog}}<p class="rail-warn">{{$.Live.Backlog}} items waiting for the filter.</p>{{end}}</section>{{end}}{{end}}

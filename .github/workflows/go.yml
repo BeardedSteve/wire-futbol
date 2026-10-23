@@ -1,0 +1,44 @@
+name: Go
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Format
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Vet
+        run: go vet ./...
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+      - name: Govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Test
+        run: go test -race -count=1 ./...
+      - name: Build image
+        run: docker build --pull -f deploy/Dockerfile -t wire-futbol:ci .
+      - name: Image runs as non-root and serves health
+        run: |
+          test "$(docker image inspect wire-futbol:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
+          docker run -d --name wire -p 3000:3000 -e DEFAULT_CLUB=lfc wire-futbol:ci
+          for i in $(seq 1 20); do curl -fsS localhost:3000/health && break; sleep 0.5; done
+          curl -fsS -H 'Host: lfc.wire.futbol' localhost:3000/ | grep -q 'Starting up'
+          docker rm -f wire
