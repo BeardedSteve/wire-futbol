@@ -34,7 +34,7 @@
     <main id="main" tabindex="-1">{{template "main" .}}</main>
     {{if .Rail}}<aside class="rail" aria-label="Fixtures, table, treatment room and sources">{{block "rail" .}}{{end}}</aside>{{end}}
   </div>
-  <footer class="foot"><p>Reads {{.Club.ReadsLine}} every 15 minutes. Opinion, rumour and clickbait are <a href="/spiked">spiked</a>.</p><p class="n">Summaries are machine-written from each outlet's headline and standfirst. They can be wrong. Follow the link before relying on detail.</p></footer>
+  <footer class="foot"><p>Reads {{.Club.ReadsLine}}. Summaries are machine-written: check the source before relying on detail.</p></footer>
 </div>
 {{template "tabbar" .}}
 <dialog class="sheet" id="alerts-sheet" aria-labelledby="sheet-h"><p class="sheet-h" id="sheet-h">Phone alerts</p><div id="sheet-body"></div></dialog>

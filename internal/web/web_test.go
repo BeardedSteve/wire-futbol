@@ -96,7 +96,7 @@ func TestPagesRenderWithoutInlineCode(t *testing.T) {
 		"/":       {`class="story`, "NEXT UP", "Brighton &amp; Hove Albion", "Treatment room", "Standing", "Confirmed", "Unconfirmed", `aria-current="true"><b>100</b>All`},
 		"/spiked": {"Why spiked", "Any reason", `name="bucket" value="promo"`},
 		"/status": {"Schedule and alerts", "liverpoolfc.com", "Refreshed", "gemini-3.8-flash"},
-		"/squad":  {"Out now", "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai", `hx-get="/squad/player/`},
+		"/squad":  {`class="si si-inj"`, `class="si si-doubt"`, `<div class="med">`, `id="p-`, "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai", `hx-get="/squad/player/`},
 		"/table":  {"Premier League", `class="me"`, "Form", "Carabao Cup"},
 		"/shorts": {"Shorts", "The Anfield Wrap and Fabrizio Romano", `class="tabbar"`, `href="/shorts" hx-boost="false" aria-current="page"`},
 	}
