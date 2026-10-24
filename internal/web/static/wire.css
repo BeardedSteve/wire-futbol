@@ -173,10 +173,6 @@ main:focus { outline: none; }
 .basis::before { content: ""; width: 10px; height: 10px; background: var(--ink-3); }
 .basis.b-ok { color: var(--ok); } .basis.b-ok::before { background: var(--ok); }
 .basis.b-warn { color: var(--warn); } .basis.b-warn::before { background: var(--warn); }
-.outlets { display: inline-flex; flex-wrap: wrap; gap: 0 12px; }
-.outlets a { display: inline-flex; align-items: center; min-height: 28px; color: var(--ink-2); text-decoration: none; }
-.outlets a:hover { color: var(--ink); text-decoration: underline; }
-.outlets a.club { color: var(--club-text); }
 .reports { flex: none; }
 .reports[open] { flex-basis: 100%; }
 .reports summary { display: inline-flex; align-items: center; min-height: 28px; list-style: none; cursor: pointer; color: var(--ink-2); text-decoration: underline dotted; text-underline-offset: 4px; }
@@ -239,21 +235,22 @@ main:focus { outline: none; }
 .sys .when { margin-left: auto; color: var(--ink-3); }
 
 /* ---------- squad ---------- */
-.outl { display: grid; }
-@media (min-width: 760px) { .outl { grid-template-columns: 1fr 1fr; column-gap: 40px; } }
-.outl li { padding: 11px 0; border-bottom: 1px solid var(--rule); }
-.outl .n { font: 700 22px/1.15 var(--serif); }
-.badge { margin-left: 10px; padding: 0 7px; font: 400 13px/1.6 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: #fff; vertical-align: 2px; }
+.badge { padding: 0 7px; font: 400 13px/1.6 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: #fff; vertical-align: 2px; }
 .badge.bad { background: var(--bad); } .badge.warn { background: var(--warn); }
 @media (prefers-color-scheme: dark) { .badge { color: var(--paper); } }
-.outl .m { display: block; font: 400 13px/1.55 var(--mono); text-transform: uppercase; color: var(--ink-3); }
-.outl a.s { display: block; margin-top: 2px; font: 400 16px/1.4 var(--serif); color: var(--ink-2); }
 .scale { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 24px; font: 400 13px var(--mono); text-transform: uppercase; color: var(--ink-3); }
 .scale .sw { display: inline-flex; gap: 2px; } .scale i { display: block; width: 22px; height: 10px; background: var(--cc); }
 .q0 { --cc: #c8102e; } .q1 { --cc: #d9822b; } .q2 { --cc: #a39c8b; } .q3 { --cc: #5e584e; } .q4 { --cc: #1c8f7a; } .q5 { --cc: #0f7a4a; }
 @media (prefers-color-scheme: dark) { .q0 { --cc: #ff5a6e; } .q2 { --cc: #6f695d; } .q3 { --cc: #b3ab99; } .q4 { --cc: #2fb79d; } .q5 { --cc: #3fcf86; } }
 .pos-sec { margin-top: 8px; }
-.pt-row { display: grid; grid-template-columns: minmax(104px, 1.5fr) repeat(5, minmax(0, 1fr)); gap: 0 8px; align-items: end; }
+.pt-row { display: grid; grid-template-columns: 18px minmax(96px, 1.5fr) repeat(5, minmax(0, 1fr)); gap: 0 8px; align-items: end; }
+/* Status icons, after Football Manager: a medical cross for injured (red) or doubtful (amber), a red card for suspended. */
+.st { align-self: center; display: grid; place-items: center; height: 18px; }
+.si { display: block; width: 16px; height: 16px; background: var(--bad); }
+.si-inj, .si-doubt { background: linear-gradient(var(--card), var(--card)) center / 10px 3px no-repeat, linear-gradient(var(--card), var(--card)) center / 3px 10px no-repeat, var(--bad); }
+.si-doubt { background-color: var(--warn); }
+.si-sus { width: 11px; height: 15px; border-radius: 1px; transform: rotate(8deg); }
+.si-out { background: linear-gradient(var(--card), var(--card)) center / 9px 3px no-repeat, var(--ink-3); }
 .pt-head { padding-bottom: 6px; font: 400 11.5px/1.2 var(--mono); text-transform: uppercase; color: var(--ink-3); }
 .pt-head span { overflow: hidden; white-space: nowrap; }
 .pt-head .short { display: none; }
@@ -264,15 +261,23 @@ main:focus { outline: none; }
 .who { display: grid; min-width: 0; align-self: center; }
 .who .nm { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 19px/1.15 var(--serif); }
 .who small { font: 400 11.5px/1.4 var(--mono); text-transform: uppercase; color: var(--ink-3); }
-.who i { display: inline-block; width: 8px; height: 8px; margin: 0 7px 0 0; vertical-align: 3px; }
-.who i.bad { background: var(--bad); } .who i.warn { background: var(--warn); }
 .pc { display: grid; gap: 5px; font: 400 15px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .pc svg { display: block; width: 100%; height: 5px; }
 .pc rect { fill: var(--rule); } .pc rect.fg { fill: var(--cc); }
 .pc.q-na { color: var(--ink-3); } .pc.q-na rect { fill: transparent; stroke: var(--rule-2); stroke-dasharray: 2 2; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .pr[open] { background: var(--card); box-shadow: inset 4px 0 0 var(--club); }
-.pr[open] > summary { padding-left: 12px; padding-right: 8px; }
-.pr-x { display: grid; gap: 12px; padding: 4px 14px 16px; }
+.pr[open] > summary { padding-left: 10px; padding-right: 8px; }
+.pr.is-flat { padding: 6px 0; }
+/* Under 90 minutes: one short line, no stats to show. */
+.pr.is-few > summary { padding: 6px 0; }
+.pr.is-few .who { grid-column: 2 / -1; display: flex; align-items: baseline; gap: 10px; }
+.pr.is-few .nm { font-weight: 600; font-size: 17px; color: var(--ink-2); }
+.med { display: grid; gap: 4px; padding: 2px 14px 10px 36px; }
+.med p { font: 400 13px/1.6 var(--mono); text-transform: uppercase; color: var(--ink-2); }
+.med .badge { margin: 0 10px 0 0; }
+.med a { font: 400 16px/1.4 var(--serif); color: var(--ink-2); }
+.med a:hover { color: var(--ink); }
+.pr-x { display: grid; gap: 12px; padding: 4px 14px 16px 36px; }
 .pr-x:empty::before { content: "Loading"; font: 13px var(--mono); text-transform: uppercase; color: var(--ink-3); }
 .strip-h { display: flex; justify-content: space-between; gap: 10px; font: 400 13px/1.4 var(--mono); text-transform: uppercase; color: var(--ink-3); }
 .strip-h b { font-weight: 400; color: var(--ink); }
@@ -357,7 +362,6 @@ main:focus { outline: none; }
 /* ---------- footer, tab bar, alerts sheet ---------- */
 .foot { display: grid; gap: 8px; max-width: 78ch; margin-top: 48px; padding-top: 12px; border-top: 3px double var(--ink); font: 400 13px/1.6 var(--mono); text-transform: uppercase; color: var(--ink-3); }
 .foot a { color: var(--ink-2); }
-.foot .n { font: 400 15px/1.5 var(--serif); text-transform: none; }
 .tabbar { display: none; }
 dialog.sheet { position: fixed; inset: calc(var(--tb-h) + 10px) max(var(--gut), calc((100vw - var(--max)) / 2 + var(--gut))) auto auto; width: min(360px, calc(100vw - 2 * var(--gut))); margin: 0; padding: 16px; border: 2px solid var(--ink); background: var(--card); color: var(--ink); box-shadow: 6px 6px 0 var(--club); }
 .sheet-h { margin-bottom: 8px; font: 400 15px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--club-text); }
@@ -391,9 +395,17 @@ dialog.sheet { position: fixed; inset: calc(var(--tb-h) + 10px) max(var(--gut), 
   .tabbar .unseen { font-size: 11px; padding: 2px 4px 1px; min-width: 18px; }
 }
 @media (max-width: 520px) {
-  .pt-row { grid-template-columns: minmax(78px, 1.25fr) repeat(5, minmax(0, 1fr)); gap: 0 5px; }
+  .med, .pr-x { padding-left: 12px; }
+  /* Phones: the name gets its own line and the five stats share the full width under it. */
+  .pt-row { grid-template-columns: 16px repeat(5, minmax(0, 1fr)); gap: 0 8px; }
+  .pt-row .who { grid-column: 2 / -1; display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .pt-row .st { align-self: start; margin-top: 2px; }
+  .pt-row .who + .pc { grid-column-start: 2; }
+  .pt-head > span:nth-child(2) { display: none; }
+  .pt-head > span:nth-child(3) { grid-column-start: 2; }
+  .pr.is-few .who { margin-bottom: 0; }
+  .who .nm { font-size: 18px; }
   .pt-head .full { display: none; } .pt-head .short { display: inline; }
-  .who .nm { font-size: 17px; }
   .pc { font-size: 13px; }
   .fxl a { grid-template-columns: 64px minmax(0, 1fr); }
   .facts div { grid-template-columns: 1fr; gap: 2px; }

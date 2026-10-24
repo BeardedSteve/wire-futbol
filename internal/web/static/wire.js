@@ -131,7 +131,16 @@
   document.addEventListener("pointerdown", showTip, { passive: true });
   addEventListener("scroll", hideTip, { passive: true });
 
-  function boot() { lastMinute = -1; tick(); markNew(); shortsBadge(); }
+  // A link to /squad#p-123 opens that player's row, so the board and treatment room land on the injury.
+  function openHash() {
+    var id = location.hash.slice(1), el = /^p-\d+$/.test(id) && document.getElementById(id);
+    if (!el || el.tagName !== "DETAILS") return;
+    el.open = true;
+    el.scrollIntoView({ block: "start" });
+  }
+  addEventListener("hashchange", openHash);
+
+  function boot() { lastMinute = -1; tick(); markNew(); shortsBadge(); openHash(); }
   document.addEventListener("DOMContentLoaded", boot);
   setInterval(tick, 1000);
   document.addEventListener("htmx:afterSettle", function (e) {

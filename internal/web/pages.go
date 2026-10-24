@@ -223,7 +223,9 @@ func flagged(m *squad.Model) []flagView {
 		switch {
 		case r.Current != nil:
 			f.Since = shortDate(r.Current.Start)
-			f.Missed = fmt.Sprintf("missed %d", r.Current.Missed)
+			if r.Current.Missed > 0 {
+				f.Missed = fmt.Sprintf("missed %d", r.Current.Missed)
+			}
 		case !r.P.NewsAdded.IsZero():
 			f.Since = shortDate(r.P.NewsAdded)
 		}
@@ -326,7 +328,7 @@ func (s *Server) tablePage(c *club.Club, st *wire.State, sq *squad.Data, now tim
 		v.Standing = standing(sq, sq.Model(c.FPLTeam, now))
 	}
 	if v.Standing == nil {
-		v.Why = "The league table appears once the squad data has loaded and the season has started."
+		v.Why = "No table yet."
 	}
 	p.Data = v
 	return p

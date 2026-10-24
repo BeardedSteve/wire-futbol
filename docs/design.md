@@ -11,6 +11,10 @@ Each visit is one of four questions, answered in this order from the top of the 
 3. **Is it true?** Every story states how sure we are, then who said it: `Confirmed` (green) when the club's own site carries it, `Unconfirmed` (amber) for injury, team news, transfer, contract and staff stories the club hasn't announced, otherwise `Reported`. The outlet links follow, the club's first.
 4. **What did I miss?** "3 new since 09:14" and a green NEW flag, worked out in the browser from the last time it had the wire open.
 
+## Copy
+
+Minimal. No introductions or explanations on pages; labels, numbers, status words and icons carry the meaning, and detail sits behind a tap. The full rule is in `CLAUDE.md`.
+
 ## Pages
 
 Every page has a teletext number. Typing three digits anywhere goes to it.
@@ -18,7 +22,7 @@ Every page has a teletext number. Typing three digits anywhere goes to it.
 | No. | Route | Shows |
 |---|---|---|
 | 100 | `/` | The wire. Desks 110 Fitness, 120 Transfers, 130 Results, 140 Club are `/?desk=` |
-| 200 | `/squad` | Out now, per-90 stats ranked against the division, availability by match |
+| 200 | `/squad` | Every player with per-90 stats ranked against the division. Status icons after Football Manager: red cross injured, amber cross doubtful, red card suspended. Opening a row shows the injury, then the spread. Availability by match |
 | 300 | `/table` | Next eight fixtures, the Premier League table and form |
 | 400 | `/shorts` | The Shorts player, unchanged apart from the title block and tokens |
 | 500 | `/spiked` | What the filter rejected and why. `/filtered` redirects here |

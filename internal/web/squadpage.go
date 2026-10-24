@@ -61,14 +61,13 @@ type cellView struct {
 type headView struct{ Full, Short, Title string }
 
 type hmRow struct {
-	ID               int
-	Name, Flag, Tone string
-	Minutes          string
-	Cells            []cellView
-}
-
-type fewView struct {
-	Name, Minutes, Flag, Tone string
+	ID      int
+	Name    string
+	Minutes string
+	Spread  bool      // enough minutes for the dot plots
+	Status  *flagView // injured, doubtful, suspended or otherwise unavailable
+	Kind    string    // the status icon: inj, doubt, sus or out
+	Cells   []cellView
 }
 
 type posView struct {
@@ -77,7 +76,6 @@ type posView struct {
 	Threshold  int
 	Heads      []headView
 	Rows       []hmRow
-	Few        []fewView
 }
 
 type keyLabel struct{ Key, Label, Title string }
@@ -92,9 +90,6 @@ type availRow struct {
 type squadView struct {
 	M         *squad.Model
 	Why       string
-	Season    string
-	Updated   string
-	Out       []flagView
 	Steps     []int
 	Positions []posView
 	Legend    []keyLabel
@@ -133,12 +128,9 @@ func (s *Server) squadPage(c *club.Club, st *wire.State, sq *squad.Data, now tim
 		}
 		return p
 	}
-	v.M, v.Season = m, sq.Season
-	if ok := sq.LastOK(); ok != nil {
-		v.Updated = rel(ok.At, now)
-	}
+	v.M = m
 
-	// Out now: everyone flagged, with the latest fitness story on the wire that names them.
+	// Each flagged player carries the latest fitness story on the wire that names them.
 	var fit []*wire.Story
 	if st != nil {
 		for _, x := range st.Stories(c.OfficialName()) {
@@ -147,23 +139,23 @@ func (s *Server) squadPage(c *club.Club, st *wire.State, sq *squad.Data, now tim
 			}
 		}
 	}
-	byID := map[int]*squad.Row{}
-	for _, r := range m.Rows {
-		byID[r.P.ID] = r
-	}
+	status := map[int]*flagView{}
 	for _, f := range flagged(m) {
-		if mt := squad.NameMatcher(byID[f.ID].P); mt != nil {
-		stories:
-			for _, x := range fit {
-				for _, it := range x.Items {
-					if mt.Match(it.Summary + " " + it.Title) {
-						f.StoryID, f.StoryText = x.ID, orDefault(it.Summary, it.Title)
-						break stories
-					}
+		status[f.ID] = &f
+	}
+	story := func(r *squad.Row, f *flagView) {
+		mt := squad.NameMatcher(r.P)
+		if mt == nil {
+			return
+		}
+		for _, x := range fit {
+			for _, it := range x.Items {
+				if mt.Match(it.Summary + " " + it.Title) {
+					f.StoryID, f.StoryText = x.ID, orDefault(it.Summary, it.Title)
+					return
 				}
 			}
 		}
-		v.Out = append(v.Out, f)
 	}
 	v.Steps = []int{0, 1, 2, 3, 4, 5}
 
@@ -181,17 +173,20 @@ func (s *Server) squadPage(c *club.Club, st *wire.State, sq *squad.Data, now tim
 			if r.P.Pos != pos {
 				continue
 			}
-			flag, tone := "", ""
-			if r.Flag != nil {
-				flag, tone = r.Flag.Text, r.Flag.Tone
+			row := hmRow{ID: r.P.ID, Name: r.P.WebName, Minutes: thousands(r.P.Minutes), Spread: r.P.Minutes >= 90}
+			if f := status[r.P.ID]; f != nil {
+				story(r, f)
+				row.Status = f
+				row.Kind = map[string]string{"i": "inj", "d": "doubt", "s": "sus"}[r.P.Status]
+				if row.Kind == "" {
+					row.Kind = "out"
+				}
 			}
-			if r.P.Minutes < 90 {
-				pv.Few = append(pv.Few, fewView{Name: r.P.WebName, Minutes: fmt.Sprint(r.P.Minutes), Flag: flag, Tone: tone})
-				continue
-			}
-			row := hmRow{ID: r.P.ID, Name: r.P.WebName, Flag: flag, Tone: tone, Minutes: thousands(r.P.Minutes)}
 			for _, cell := range r.Cells {
 				val := fmtStat(cell.Stat, cell.Value)
+				if !row.Spread {
+					val = "" // per 90 over a few minutes says nothing
+				}
 				label := cell.Stat.Label
 				if cell.Stat.Unit == "p90" {
 					label += " per 90"
@@ -209,7 +204,7 @@ func (s *Server) squadPage(c *club.Club, st *wire.State, sq *squad.Data, now tim
 			}
 			pv.Rows = append(pv.Rows, row)
 		}
-		if len(pv.Rows)+len(pv.Few) > 0 {
+		if len(pv.Rows) > 0 {
 			v.Positions = append(v.Positions, pv)
 		}
 	}

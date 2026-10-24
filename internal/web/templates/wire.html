@@ -18,7 +18,7 @@
 
 {{define "main"}}{{if not .Data}}{{template "empty" (list "Starting up" "The first run hasn't finished yet. The wire reads its sources every 15 minutes.")}}{{else}}{{with .Data}}
 {{with .Splash}}<section class="splash" id="s-{{.ID}}" data-fetched="{{.Fetched}}" aria-labelledby="splash-h"><p class="lbl">Lead story · {{.Ago}}</p>{{template "hd" .}}<h2 id="splash-h">{{.Headline}}</h2>{{template "ft" .}}</section>{{end}}
-{{with .Quiet}}<p class="quiet"><b>All quiet.</b> Nothing new since {{.}}. If something breaks, it lands here first.</p>{{end}}
+{{with .Quiet}}<p class="quiet"><b>All quiet</b> since {{.}}</p>{{end}}
 {{template "feedzone" .Feed}}
 {{template "pulse" (pulseOf .)}}{{end}}{{end}}{{end}}
 
