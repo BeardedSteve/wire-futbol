@@ -76,9 +76,13 @@ func (d Dir) Put(_ context.Context, key string, body []byte, _ string) error {
 	return os.Rename(tmp, p)
 }
 
-// Retry runs fn up to four times, waiting 1, 4 and 12 seconds between attempts. A missing object is not retried.
+// retryWaits are the pauses between attempts. Railway buckets sometimes answer HTTP 408 for twenty seconds or so,
+// so the last wait outlasts that.
+var retryWaits = []time.Duration{time.Second, 4 * time.Second, 12 * time.Second, 30 * time.Second}
+
+// Retry runs fn up to five times, waiting 1, 4, 12 and 30 seconds between attempts. A missing object is not retried.
 func Retry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
-	waits := []time.Duration{time.Second, 4 * time.Second, 12 * time.Second}
+	waits := retryWaits
 	for i := 0; ; i++ {
 		v, err := fn()
 		if err == nil || errors.Is(err, ErrNotFound) || i == len(waits) {

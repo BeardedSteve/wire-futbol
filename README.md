@@ -2,7 +2,7 @@
 
 Club news wires for wire.futbol. Each club's wire reads tier 1 sources, keeps the news, drops opinion, rumour and clickbait, and shows the rest in one place. Liverpool runs at lfc.wire.futbol.
 
-The app is being rewritten from Bun/TypeScript to Go. Both live in this repo until cutover: the Go app under `cmd/` and `internal/`, the Bun app under `services/` and `lib/`. Production still runs the Bun app.
+Production runs the Go app under `cmd/` and `internal/` (since 23 October 2026). The old Bun/TypeScript app under `services/` and `lib/` stays in the repo as a rollback until it is removed.
 
 ## How it fits together
 
@@ -86,7 +86,7 @@ A source listed by several clubs is fetched once and its items go to each club's
 
 | Branch | Railway environment | Runs |
 |---|---|---|
-| `production` | production | Bun app |
+| `production` | production | Go app, built from `deploy/Dockerfile` |
 | `main` | staging | Bun app |
 | `claude/youthful-pascal-r6sggv` | `wire-futbol-go-staging` project | Go app, built from `deploy/Dockerfile` |
 
