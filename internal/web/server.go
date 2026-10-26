@@ -18,6 +18,7 @@ import (
 	"path"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -59,10 +60,11 @@ type Server struct {
 	fetch  *fetch.Client
 	now    func() time.Time
 
-	pages  map[string]*template.Template
-	shorts *template.Template
-	assets map[string]asset // by file name
-	byPath map[string]asset // by hashed URL path
+	pages   map[string]*template.Template
+	shorts  *template.Template
+	assets  map[string]asset // by file name
+	byPath  map[string]asset // by hashed URL path
+	clubCSS map[string][]byte
 
 	mu        sync.Mutex
 	states    map[string]*cached[*wire.State]
@@ -75,7 +77,7 @@ type Server struct {
 
 type asset struct {
 	path, ctype string
-	body        []byte
+	body, gz    []byte
 }
 
 type cached[T any] struct {
@@ -97,40 +99,77 @@ func New(cfg Config, st store.Store, vapid *push.VAPID, fc *fetch.Client) (*Serv
 		return nil, err
 	}
 	funcs := template.FuncMap{
-		"asset": func(name string) string { return s.assets[name].path },
-		"icon":  func(name string) template.HTML { return icon[name] },
-		"list":  func(v ...string) []string { return v },
+		"asset": func(name string) string {
+			a, ok := s.assets[name]
+			if !ok {
+				panic("no asset " + name)
+			}
+			return a.path
+		},
+		"icon":      func(name string) template.HTML { return icon[name] },
+		"list":      func(v ...string) []string { return v },
+		"upper":     strings.ToUpper,
+		"orDefault": orDefault,
+		"pulseOf":   func(v *wireView) pulseView { return pulseView{Run: v.Run, N: v.N} },
 	}
 	base := template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	s.pages = map[string]*template.Template{}
-	for _, name := range []string{"wire", "filtered", "status", "squad"} {
+	for _, name := range []string{"wire", "spiked", "status", "squad", "table"} {
 		t := template.Must(base.Clone())
 		s.pages[name] = template.Must(t.ParseFS(templateFS, "templates/"+name+".html"))
 	}
 	s.shorts = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/shorts.html"))
+	s.clubCSS = map[string][]byte{}
+	for i := range club.Clubs {
+		s.clubCSS[club.Clubs[i].Slug] = clubCSS(&club.Clubs[i])
+	}
 	return s, nil
 }
 
-// loadAssets fingerprints the static files so they can be cached for a year.
+var contentTypes = map[string]string{
+	".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
+}
+
+// loadAssets fingerprints the static files so they can be cached for a year. Stylesheets are fingerprinted after
+// the files they point at, with each /static/name in them rewritten to its fingerprinted path.
 func (s *Server) loadAssets() error {
 	s.assets, s.byPath = map[string]asset{}, map[string]asset{}
-	return fs.WalkDir(staticFS, "static", func(p string, d fs.DirEntry, err error) error {
+	files := map[string][]byte{}
+	err := fs.WalkDir(staticFS, "static", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 		b, err := staticFS.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		name := path.Base(p)
+		files[path.Base(p)] = b
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	add := func(name string, b []byte) {
 		sum := sha256.Sum256(b)
 		ext := path.Ext(name)
-		ctype := map[string]string{".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8"}[ext]
-		a := asset{path: "/static/" + strings.TrimSuffix(name, ext) + "." + hex.EncodeToString(sum[:])[:10] + ext, ctype: ctype, body: b}
-		s.assets[name] = a
-		s.byPath[a.path] = a
-		return nil
-	})
+		a := asset{path: "/static/" + strings.TrimSuffix(name, ext) + "." + hex.EncodeToString(sum[:])[:10] + ext, ctype: contentTypes[ext], body: b}
+		if ext != ".woff2" {
+			a.gz = gzipped(b)
+		}
+		s.assets[name], s.byPath[a.path] = a, a
+	}
+	for name, b := range files {
+		if path.Ext(name) != ".css" {
+			add(name, b)
+		}
+	}
+	for name, b := range files {
+		if path.Ext(name) == ".css" {
+			css := string(b)
+			for n, a := range s.assets {
+				css = strings.ReplaceAll(css, "/static/"+n+")", a.path+")")
+			}
+			add(name, []byte(css))
+		}
+	}
+	return nil
 }
 
 type ctxKey struct{}
@@ -141,9 +180,15 @@ func clubOf(r *http.Request) *club.Club { return r.Context().Value(ctxKey{}).(*c
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.page("wire"))
-	mux.HandleFunc("GET /filtered", s.page("filtered"))
+	mux.HandleFunc("GET /spiked", s.page("spiked"))
 	mux.HandleFunc("GET /status", s.page("status"))
 	mux.HandleFunc("GET /squad", s.page("squad"))
+	mux.HandleFunc("GET /table", s.page("table"))
+	mux.HandleFunc("GET /squad/player/{id}", s.playerStrips)
+	mux.HandleFunc("GET /fragments/pulse", s.pulse)
+	mux.HandleFunc("GET /filtered", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/spiked", http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /shorts", s.shortsPage)
 	mux.HandleFunc("GET /api/shorts", s.apiShorts)
 	mux.HandleFunc("GET /api/version", s.apiVersion)
@@ -154,7 +199,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/push/test", s.limited(s.pushTest))
 	mux.HandleFunc("GET /manifest.webmanifest", s.manifest)
 	mux.HandleFunc("GET /sw.js", s.serviceWorker)
-	mux.HandleFunc("GET /club.css", s.clubCSS)
+	mux.HandleFunc("GET /club.css", s.serveClubCSS)
 	mux.HandleFunc("GET /static/", s.static)
 	for _, p := range []string{"/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"} {
 		mux.HandleFunc("GET "+p, s.iconPNG)
@@ -164,13 +209,13 @@ func (s *Server) Handler() http.Handler {
 	root := http.NewServeMux()
 	root.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	root.Handle("/", sites)
-	return s.logged(secure(root))
+	return s.logged(secure(compress(root)))
 }
 
 // withClub resolves the club and redirects page views on the railway.app address to the canonical domain.
 // The service worker, icons and push API stay put so existing installs keep working.
 func (s *Server) withClub(next http.Handler) http.Handler {
-	pages := map[string]bool{"/": true, "/filtered": true, "/status": true, "/shorts": true, "/squad": true}
+	pages := map[string]bool{"/": true, "/filtered": true, "/spiked": true, "/status": true, "/shorts": true, "/squad": true, "/table": true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := r.Host
 		if canon := s.cfg.CanonicalHost; canon != "" && r.Method == http.MethodGet && pages[r.URL.Path] {
@@ -189,7 +234,7 @@ func (s *Server) withClub(next http.Handler) http.Handler {
 	})
 }
 
-const csp = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; " +
+const csp = "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; " +
 	"img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com; connect-src 'self'; manifest-src 'self'; worker-src 'self'; " +
 	"object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 
@@ -307,24 +352,63 @@ func (s *Server) squad(ctx context.Context) *squad.Data {
 
 // ---------- pages ----------
 
+// fragment reports whether htmx asked for one element of the page rather than the whole of it.
+func fragment(r *http.Request, target string) bool {
+	return r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Target") == target
+}
+
 func (s *Server) page(name string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c := clubOf(r)
 		st, _ := s.state(r.Context(), c)
 		now := s.now()
+		q := r.URL.Query()
 		var p *page
 		switch name {
 		case "wire":
-			p = s.wirePage(c, st, now)
-		case "filtered":
-			p = s.filteredPage(c, st, now)
+			p = s.wirePage(c, st, s.squad(r.Context()), now, q.Get("desk"))
+			if v, ok := p.Data.(*wireView); ok && fragment(r, "feedzone") {
+				v.Feed.OOB = true
+				s.render(w, s.pages[name], "feedzone", v.Feed)
+				return
+			}
+		case "spiked":
+			p = s.spikedPage(c, st, now, q.Get("q"), q.Get("bucket"))
+			if v, ok := p.Data.(*spikedView); ok && fragment(r, "spiked-results") {
+				s.render(w, s.pages[name], "results", v.Results)
+				return
+			}
 		case "status":
 			p = s.statusPage(c, st, s.squad(r.Context()), now)
 		case "squad":
 			p = s.squadPage(c, st, s.squad(r.Context()), now)
+		case "table":
+			p = s.tablePage(c, st, s.squad(r.Context()), now)
 		}
 		s.render(w, s.pages[name], "layout", p)
 	}
+}
+
+func (s *Server) pulse(w http.ResponseWriter, r *http.Request) {
+	c := clubOf(r)
+	st, _ := s.state(r.Context(), c)
+	n, _ := strconv.Atoi(r.URL.Query().Get("n"))
+	s.render(w, s.pages["wire"], "pulse", pulse(c, st, s.now(), r.URL.Query().Get("run"), n))
+}
+
+func (s *Server) playerStrips(w http.ResponseWriter, r *http.Request) {
+	c := clubOf(r)
+	id, _ := strconv.Atoi(r.PathValue("id"))
+	var v *stripsView
+	if sq := s.squad(r.Context()); sq != nil {
+		if m := sq.Model(c.FPLTeam, s.now()); m != nil {
+			v = strips(m, id)
+		}
+	}
+	if v == nil {
+		w.WriteHeader(http.StatusNotFound)
+	}
+	s.render(w, s.pages["squad"], "strips", v)
 }
 
 func (s *Server) render(w http.ResponseWriter, t *template.Template, name string, data any) {
@@ -336,6 +420,7 @@ func (s *Server) render(w http.ResponseWriter, t *template.Template, name string
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Add("Vary", "HX-Request, HX-Target")
 	w.Write(buf.Bytes())
 }
 
@@ -345,13 +430,12 @@ func (s *Server) shortsPage(w http.ResponseWriter, r *http.Request) {
 	for _, ch := range c.Shorts {
 		names = append(names, ch.Name)
 	}
-	list := strings.Join(names, ", ")
-	if n := len(names); n > 1 {
-		list = strings.Join(names[:n-1], ", ") + " and " + names[n-1]
-	}
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin") // YouTube embeds need the origin
 	w.Header().Set("X-Robots-Tag", "noindex")
-	s.render(w, s.shorts, "shorts", &page{Club: c, Favicon: favicon(c.Colours.Accent), Fonts: fontsURL, Data: list})
+	st, _ := s.state(r.Context(), c)
+	p := s.basePage(c, st, s.now(), "Shorts · "+c.App(), "shorts")
+	p.Data = plainList(names)
+	s.render(w, s.shorts, "shorts", p)
 }
 
 // ---------- APIs ----------
@@ -370,7 +454,7 @@ func (s *Server) apiVersion(w http.ResponseWriter, r *http.Request) {
 		if !st.LastRun.IsZero() {
 			out["lastRun"] = iso(st.LastRun)
 		}
-		out["stories"] = len(st.Stories(c.OfficialName()))
+		out["stories"] = len(stories(c, st, s.now()))
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, out)
@@ -460,6 +544,14 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", a.ctype)
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if a.gz != nil {
+		w.Header().Add("Vary", "Accept-Encoding")
+		if acceptsGzip(r) {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Write(a.gz)
+			return
+		}
+	}
 	w.Write(a.body)
 }
 
@@ -474,7 +566,7 @@ func (s *Server) manifest(w http.ResponseWriter, r *http.Request) {
 	c := clubOf(r)
 	m := map[string]any{
 		"id": "/", "name": c.App(), "short_name": c.App(), "description": c.Name + " news from tier 1 sources only.",
-		"start_url": "/", "scope": "/", "display": "standalone", "background_color": "#F5F6F7", "theme_color": "#F5F6F7",
+		"start_url": "/", "scope": "/", "display": "standalone", "background_color": paper, "theme_color": paper,
 		"icons": []map[string]string{
 			{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
 			{"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
@@ -485,12 +577,25 @@ func (s *Server) manifest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(m)
 }
 
-func (s *Server) clubCSS(w http.ResponseWriter, r *http.Request) {
-	k := clubOf(r).Colours
+// paper is the page colour in wire.css, for the installed app's splash screen and title bar.
+const paper = "#efeadf"
+
+// clubCSS sets the club colour. Text on it is white or ink, whichever reads better.
+func clubCSS(c *club.Club) []byte {
+	k := c.Colours
+	return fmt.Appendf(nil, ":root{--club:%s;--club-ink:%s;--club-text:%s}\n@media (prefers-color-scheme:dark){:root{--club-text:%s}}\n",
+		k.Accent, onColour(k.Accent), k.AccentText, k.AccentTextDark)
+}
+
+func (s *Server) clubCSSPath(c *club.Club) string {
+	sum := sha256.Sum256(s.clubCSS[c.Slug])
+	return "/club.css?v=" + hex.EncodeToString(sum[:])[:10]
+}
+
+func (s *Server) serveClubCSS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-	fmt.Fprintf(w, ":root{--red:%s;--red-text:%s;--red-wash:%s;--bad:%s}\n@media (prefers-color-scheme:dark){:root{--red:%s;--red-text:%s;--red-wash:%s;--bad:%s}}\n",
-		k.Accent, k.AccentText, k.AccentWash, k.Accent, k.AccentDark, k.AccentTextDark, k.AccentWashDark, k.AccentDark)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Write(s.clubCSS[clubOf(r).Slug])
 }
 
 func (s *Server) iconPNG(w http.ResponseWriter, r *http.Request) {

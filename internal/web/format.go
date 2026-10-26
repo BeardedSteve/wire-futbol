@@ -49,24 +49,6 @@ func rel(t, now time.Time) string {
 	return shortDay(t) + " " + hm(t)
 }
 
-func untilText(t, now time.Time) string {
-	s := t.Sub(now).Seconds()
-	if s <= 0 {
-		if s > -2.5*3600 {
-			return "Live now"
-		}
-		return "Finished"
-	}
-	d, h, m := int(s/86400), int(math.Mod(s, 86400)/3600), int(math.Mod(s, 3600)/60)
-	switch {
-	case d > 0:
-		return fmt.Sprintf("in %dd %dh", d, h)
-	case h > 0:
-		return fmt.Sprintf("in %dh %dm", h, m)
-	}
-	return fmt.Sprintf("in %d min", m)
-}
-
 func iso(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
 
 // timeTag is a <time> that client.js keeps relative.

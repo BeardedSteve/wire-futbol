@@ -1,26 +1,44 @@
-{{define "top"}}{{if .Data}}{{with .Data.Next}}<div class="fx-strip{{if .Live}} is-live{{end}}"><a class="fx-in" href="{{.URL}}" rel="noopener" target="_blank">
-  <span class="fx-main"><span class="fx-teams"><span class="{{if .HomeUs}}us{{end}}">{{.Home}}</span> <span class="v">v</span> <span class="{{if .AwayUs}}us{{end}}">{{.Away}}</span></span><span class="fx-meta">{{.When}}{{if .Competition}}, {{.Competition}}{{end}}</span></span>
-  <span class="fx-until" data-kickoff="{{.Start}}">{{.Until}}</span>
-  <span class="sr-only">{{.Spoken}}</span>
-</a></div>{{end}}{{end}}{{end}}
+{{define "top"}}{{with .Data}}{{with .Stop}}<a class="stop" href="/#s-{{.ID}}" role="status"><span class="stop-k">Stop press</span><span class="stop-h">{{.Headline}}</span><span class="stop-m">{{.Ago}} · <span class="b-{{.Basis.Tone}}">{{.Basis.Word}}</span></span></a>{{end}}
+{{with .Board}}{{template "board" .}}{{end}}{{end}}{{end}}
 
-{{define "main"}}{{if not .Data}}{{template "empty" (list "Starting up" "The first run hasn't finished yet. The wire reads its sources every 15 minutes.")}}{{else}}{{with .Data}}<h1 class="sr-only">{{$.Club.Name}} news</h1>
-<div class="list-head">{{if .Chips}}<div class="chips" role="toolbar" aria-label="Show stories about">{{range .Chips}}<button type="button" class="chip" data-filter="{{.Key}}" aria-pressed="{{.Pressed}}">{{.Label}}<span class="n">{{.N}}</span></button>{{end}}</div>{{end}}</div>
-<div class="newline" id="newline" hidden></div>
-<div class="feed{{if not .Chips}} has-no-chips{{end}}" id="feed">{{range .Days}}<section class="day"><h2 class="day-h">{{.Label}}</h2><div class="day-list">{{range .Stories}}{{template "story" .}}{{end}}</div></section>{{else}}{{template "empty" (list "Nothing yet" "No news in the last few days. New stories appear here as they break.")}}{{end}}</div>
-<div class="empty-filter" id="empty-filter" hidden>{{template "empty" (list "Nothing here right now" "Choose All to see every story.")}}</div>{{end}}{{end}}{{end}}
+{{define "board"}}<section class="board is-{{.Phase}}" aria-labelledby="board-h">
+{{if eq .Phase "post"}}<p class="tags"><span class="t">{{upper .Tag}}</span><span>{{upper .Competition}}</span><span class="w">{{upper .Day}}</span></p>
+<h2 class="dh" id="board-h"><span class="w">{{upper .Home}}</span> <span class="y">{{.HomeScore}}</span></h2>
+<p class="dh"><span class="w">{{upper .Away}}</span> <span class="y">{{.AwayScore}}</span></p>
+{{with .Next}}<p class="out"><span class="lbl">Next</span>{{if .Home}}v{{else}}at{{end}} {{upper .Opp}}, {{upper .Competition}}, <span class="w">{{upper .Day}} {{.HM}}</span></p>{{end}}
+{{else}}<p class="tags"><span class="t{{if eq .Phase "live"}} flash{{end}}">{{upper .Tag}}</span><span>{{upper .Competition}}</span><span class="w">{{upper .Day}} {{.HM}}</span>{{if .Venue}}<span>{{upper .Venue}}</span>{{end}}</p>
+<h2 class="dh" id="board-h"><span class="w">{{upper .Us}}</span><span class="sr-only">,</span> <span class="c">{{.Prep}}</span> <span class="y">{{upper .Opp}}</span></h2>
+{{if eq .Phase "live"}}<p class="ko" data-kickoff="{{.Kickoff}}">Kicked off {{.HM}} · <b>T+<span data-elapsed>{{.Elapsed}}</span> min</b></p>
+{{else}}<div class="clock" data-kickoff="{{.Kickoff}}" role="timer" aria-label="Time to kick-off"><span class="tm">T-minus</span>{{range .Tiles}}<span class="tile" data-u="{{.U}}"><b>{{.V}}</b><span>{{.L}}</span></span>{{end}}</div>{{end}}
+{{if or .Out .Doubt}}{{if .Out}}<p class="out"><span class="lbl">Out</span>{{range .Out}}<a class="o" href="/squad#p-{{.ID}}">{{upper .Name}}{{if .What}} <em>{{.What}}</em>{{end}}</a> {{end}}</p>{{end}}
+{{if .Doubt}}<p class="out"><span class="lbl">Doubtful</span>{{range .Doubt}}<a class="d" href="/squad#p-{{.ID}}">{{upper .Name}}{{if .What}} <em>{{.What}}{{if .Chance}} {{.Chance}}{{end}}</em>{{end}}</a> {{end}}</p>{{end}}
+<p class="more">{{if eq .Phase "live"}}<a href="{{.URL}}" rel="noopener" target="_blank">Follow on {{upper .Official}}</a>{{end}}<a href="/squad">{{if .More}}+{{.More}} more · {{end}}Squad 200</a></p>
+{{else if eq .Phase "live"}}<p class="more"><a href="{{.URL}}" rel="noopener" target="_blank">Follow on {{upper .Official}}</a></p>{{end}}{{end}}
+</section>{{end}}
 
-{{define "story"}}<article class="story{{if .Material}} is-material{{end}}" data-group="{{.Group}}" data-fetched="{{.Fetched}}" id="s-{{.ID}}">
-  <div class="st"><time datetime="{{.Latest}}" title="{{.When}}">{{.HM}}</time><span class="new-badge" hidden>New</span></div>
-  <div class="sb">
-    <h3 class="summary">{{.Headline}}</h3>
-    <div class="meta"><span class="cat">{{.Label}}</span>{{if .Material}}<span class="mat">{{if .Pushed}}{{icon "bell"}}Alert sent{{else}}Major{{end}}</span>{{end}}<span class="srcs">{{range .Outlets}}{{if .Club}}<a class="src club" href="{{.URL}}" rel="noopener" target="_blank" title="{{.Title}}">{{icon "tick"}}Club</a>{{else}}<a class="src" href="{{.URL}}" rel="noopener" target="_blank" title="{{.Title}}">{{.Name}}</a>{{end}}{{end}}</span>{{if gt (len .Reports) 1}}<details class="reports"><summary><span class="r-open">{{len .Reports}} reports</span><span class="r-close">Hide reports</span></summary><ol>{{range .Reports}}<li{{if .Lead}} class="is-lead"{{end}}><p>{{.Summary}}</p><div class="rep-meta"><a href="{{.URL}}" rel="noopener" target="_blank">{{.Source}}{{icon "ext"}}</a>{{.Time}}</div></li>{{end}}</ol></details>{{end}}</div>
-  </div>
-</article>{{end}}
+{{define "main"}}{{if not .Data}}{{template "empty" (list "Starting up" "The first run hasn't finished yet. The wire reads its sources every 15 minutes.")}}{{else}}{{with .Data}}
+{{with .Splash}}<section class="splash" id="s-{{.ID}}" data-fetched="{{.Fetched}}" aria-labelledby="splash-h"><p class="lbl">Lead story · {{.Ago}}</p>{{template "hd" .}}<h2 id="splash-h">{{.Headline}}</h2>{{template "ft" .}}</section>{{end}}
+{{with .Quiet}}<p class="quiet"><b>All quiet</b> since {{.}}</p>{{end}}
+{{template "feedzone" .Feed}}
+{{template "pulse" (pulseOf .)}}{{end}}{{end}}{{end}}
 
-{{define "rail"}}{{with .Data}}{{if .Fixtures}}<section class="rail-sec"><h2 class="rail-h">Fixtures</h2><ol class="fx-list">{{range $i, $f := .Fixtures}}<li{{if eq $i 0}} class="is-next"{{end}}><a href="{{.URL}}" rel="noopener" target="_blank"><span class="fx-d">{{.Day}}</span><span class="fx-o">{{if not .HomeUs}}<span class="at">at </span>{{end}}{{.Opponent}}</span><span class="fx-c">{{.Competition}}{{if eq $i 0}}, <span data-kickoff="{{.Start}}">{{.Until}}</span>{{end}}</span></a></li>{{end}}</ol></section>{{end}}
-<section class="rail-sec"><h2 class="rail-h">The wire</h2><dl class="mini">
-  <div><dt>Sources</dt><dd><span class="sdot {{if .AllHealthy}}ok{{else}}warn{{end}}" aria-hidden="true"></span>{{.Healthy}} of {{.SourceCount}} healthy</dd></div>
-  <div><dt>Last read</dt><dd>{{if .LastRead}}{{.LastRead}}{{else}}Not yet{{end}}</dd></div>
-  <div><dt>Filtered</dt><dd>{{.Kept}} kept, {{.Dropped}} kept out</dd></div>
-</dl><p class="rail-links"><a href="/status">Status</a><a href="/filtered">Kept out</a></p>{{if $.Live.Backlog}}<p class="rail-warn">{{$.Live.Backlog}} items waiting for the filter.</p>{{end}}</section>{{end}}{{end}}
+{{define "feedzone"}}<div id="feedzone">{{if .Desks}}<nav class="menu" aria-label="Desks">{{range .Desks}}<a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#feedzone" hx-swap="outerHTML" hx-push-url="true"{{if .Current}} aria-current="true"{{end}}><b>{{.No}}</b>{{.Label}}<small>{{.N}}</small></a>{{end}}</nav>{{end}}
+<p class="since" id="since" hidden></p>
+<div class="feed" id="feed">{{range .Days}}<section class="day"><h2 class="sec"><span>{{.Label}}</span><small>{{len .Stories}}</small></h2>{{range .Stories}}{{template "story" .}}{{end}}</section>{{else}}{{template "empty" (list "Nothing on this desk" "Choose All to see every story.")}}{{end}}</div>
+</div>{{if .OOB}}<span class="v" id="pgnum" data-no="{{.No}}" hx-swap-oob="true">P{{.No}}</span>{{end}}{{end}}
+
+{{define "hd"}}<p class="hd"><span>{{.Label}}</span>{{if .Material}}<span class="major">{{if .Pushed}}Alert sent{{else}}Major{{end}}</span>{{end}}</p>{{end}}
+
+{{define "ft"}}<div class="ft"><span class="basis b-{{.Basis.Tone}}"{{with .Basis.Title}} title="{{.}}"{{end}}>{{.Basis.Word}}</span><span class="outlets">{{range .Outlets}}<a{{if .Club}} class="club"{{end}} href="{{.URL}}" rel="noopener" target="_blank" title="{{.Title}}">{{.Name}}</a>{{end}}</span>{{if .Reports}}<details class="reports"><summary><span class="o">{{len .Reports}} reports</span><span class="x">Hide</span></summary><ol>{{range .Reports}}<li{{if .Lead}} class="lead"{{end}}><p>{{.Summary}}</p><p class="rm"><a href="{{.URL}}" rel="noopener" target="_blank">{{.Source}}</a> {{.Time}}</p></li>{{end}}</ol></details>{{end}}</div>{{end}}
+
+{{define "story"}}<article class="story{{if .Material}} is-major{{end}}" id="s-{{.ID}}" data-fetched="{{.Fetched}}"><time class="t" datetime="{{.Latest}}" title="{{.When}}">{{.HM}}</time><div class="sb">{{template "hd" .}}<h3>{{.Headline}}</h3>{{template "ft" .}}</div></article>{{end}}
+
+{{define "pulse"}}{{if .Fresh}}<div id="pulse" class="toast" role="status"><a href="/">{{.Fresh}} new {{if eq .Fresh 1}}story{{else}}stories{{end}}. <b>Show</b></a></div>{{else}}<div id="pulse" hx-get="/fragments/pulse?run={{.Run}}&amp;n={{.N}}" hx-trigger="every 120s" hx-swap="outerHTML"></div>{{end}}{{end}}
+
+{{define "rail"}}{{with .Data}}
+{{if .Fixtures}}<section class="panel" aria-labelledby="fx-h"><h2 class="sec" id="fx-h"><span>Fixtures</span><small><a href="/table">300</a></small></h2>{{template "fixtures" .Fixtures}}</section>{{end}}
+{{with .Standing}}<section class="panel" aria-labelledby="st-h"><h2 class="sec" id="st-h"><span>Standing</span><small><a href="/table">300</a></small></h2>{{template "pos" .}}{{template "league" .Near}}</section>{{end}}
+{{if .HasSquad}}<section class="panel" aria-labelledby="tr-h"><h2 class="sec" id="tr-h"><span>Treatment room</span><small><a href="/squad">200</a></small></h2>{{if .Treatment}}<ul class="treat">{{range .Treatment}}<li><span class="sq {{if .Doubt}}warn{{else}}bad{{end}}" aria-hidden="true"></span><a href="/squad#p-{{.ID}}">{{.Name}}</a><span class="f">{{.Flag}}</span><small>{{orDefault .What "Unavailable"}}{{with .Since}} since {{.}}{{end}}{{with .Missed}}, {{.}}{{end}}</small></li>{{end}}</ul>{{else}}<p class="note">Nobody on the injury list.</p>{{end}}</section>{{end}}
+<section class="panel" aria-labelledby="so-h"><h2 class="sec" id="so-h"><span>Sources</span><small><a href="/status">600</a></small></h2><ul class="sys">{{range .Sources}}<li><span class="sq {{.Dot}}" aria-hidden="true"></span>{{.Name}}<span class="when">{{if .Last}}{{.Last}}{{else}}never read{{end}}</span></li>{{end}}</ul></section>
+{{end}}{{end}}
+

@@ -77,7 +77,15 @@ func main() {
 	}
 }
 
-func openStore() store.Store { return store.FromEnv(os.Getenv, env("DATA_DIR", "./data")) }
+func openStore() store.Store {
+	st := store.FromEnv(os.Getenv, env("DATA_DIR", "./data"))
+	if b, ok := st.(*store.S3); ok {
+		slog.Info("store", "kind", "bucket", "bucket", b.Bucket)
+	} else {
+		slog.Info("store", "kind", "directory", "path", env("DATA_DIR", "./data"))
+	}
+	return st
+}
 
 func vapid() *push.VAPID {
 	pub, priv := os.Getenv("VAPID_PUBLIC_KEY"), os.Getenv("VAPID_PRIVATE_KEY")
@@ -116,7 +124,7 @@ func adoptLegacy(ctx context.Context, st store.Store) {
 		return
 	}
 	for from, to := range map[string]string{"state.json": poll.StateKey(c), "subs.json": poll.SubsKey(c)} {
-		copied, err := store.CopyIfAbsent(ctx, st, from, to, "application/json")
+		copied, err := store.Retry(ctx, func() (bool, error) { return store.CopyIfAbsent(ctx, st, from, to, "application/json") })
 		if err != nil {
 			slog.Error("legacy copy failed", "from", from, "to", to, "err", err)
 		} else if copied {
