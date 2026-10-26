@@ -124,7 +124,7 @@ func adoptLegacy(ctx context.Context, st store.Store) {
 		return
 	}
 	for from, to := range map[string]string{"state.json": poll.StateKey(c), "subs.json": poll.SubsKey(c)} {
-		copied, err := store.CopyIfAbsent(ctx, st, from, to, "application/json")
+		copied, err := store.Retry(ctx, func() (bool, error) { return store.CopyIfAbsent(ctx, st, from, to, "application/json") })
 		if err != nil {
 			slog.Error("legacy copy failed", "from", from, "to", to, "err", err)
 		} else if copied {

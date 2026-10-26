@@ -106,3 +106,28 @@ func TestCopyIfAbsent(t *testing.T) {
 		t.Fatal("source changed")
 	}
 }
+
+func TestRetry(t *testing.T) {
+	defer func(w []time.Duration) { retryWaits = w }(retryWaits)
+	retryWaits = []time.Duration{0, 0, 0, 0}
+	ctx := context.Background()
+	calls := 0
+	b, err := Retry(ctx, func() (string, error) {
+		calls++
+		if calls < 5 {
+			return "", errors.New("HTTP 408")
+		}
+		return "ok", nil
+	})
+	if err != nil || b != "ok" || calls != 5 {
+		t.Fatalf("got %q %v after %d calls", b, err, calls)
+	}
+	calls = 0
+	if _, err := Retry(ctx, func() (string, error) { calls++; return "", ErrNotFound }); !errors.Is(err, ErrNotFound) || calls != 1 {
+		t.Fatalf("not found: %v after %d calls", err, calls)
+	}
+	calls = 0
+	if _, err := Retry(ctx, func() (string, error) { calls++; return "", errors.New("down") }); err == nil || calls != 5 {
+		t.Fatalf("persistent failure: %v after %d calls", err, calls)
+	}
+}
