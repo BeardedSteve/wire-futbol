@@ -1,18 +1,13 @@
-{{define "shorts"}}<!doctype html><html lang="en-GB"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Shorts · {{.Club.App}}</title><meta name="robots" content="noindex">
-<meta name="theme-color" content="#F5F6F7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0E1215" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="{{.Favicon}}"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest">
-<link rel="preconnect" href="https://www.youtube.com"><link rel="preconnect" href="https://i.ytimg.com"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="{{.Fonts}}">
-<link rel="stylesheet" href="{{asset "app.css"}}"><link rel="stylesheet" href="/club.css"><link rel="stylesheet" href="{{asset "shorts.css"}}"></head><body class="sh-body">
+{{define "shorts"}}<!doctype html><html lang="en-GB" data-now="{{.Now}}"><head>
+{{template "head" .}}<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://www.youtube.com"><link rel="preconnect" href="https://i.ytimg.com"><link rel="stylesheet" href="{{asset "shorts.css"}}">
+<script src="{{asset "wire.js"}}" defer></script><script src="{{asset "shorts.js"}}" defer></script>
+</head><body class="sh-body" data-pages="{{.Pages}}">
 <a class="skip" href="#sh-controls">Skip to controls</a>
-<header class="bar"><div class="bar-in">
-  {{template "mark" .}}
-  <a class="back" href="/">{{icon "chev"}}Back to the wire</a>
-</div></header>
+{{template "titleblock" .}}
 <div class="sh-meter" id="sh-meter" role="progressbar" aria-label="Shorts seen this visit" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span id="sh-fill"></span></div>
 <div class="sh-head">
-  <h1 class="sh-h">Shorts <span class="sh-n" id="sh-n"></span></h1>
+  <h1 class="sh-h"><a class="sh-back" href="/" aria-label="Back to the wire"><b>100</b>Wire</a><span>Shorts</span> <span class="sh-n" id="sh-n"></span></h1>
   <button type="button" class="sh-all" id="sh-all" disabled>{{icon "checks"}}<span>Mark all seen</span></button>
 </div>
 <main id="main" class="sh-stage">
@@ -29,4 +24,5 @@
 <p class="sh-keys" aria-hidden="true"><span><kbd>Up</kbd>seen</span><span><kbd>Down</kbd>skip</span><span><kbd>M</kbd>sound</span><span><kbd>Space</kbd>pause</span><span><kbd>U</kbd>undo</span></p>
 <div class="sr-only" id="sh-live" aria-live="polite"></div>
 <noscript><p class="sh-noscript">Shorts needs JavaScript to play videos.</p></noscript>
-<script src="{{asset "shorts.js"}}"></script></body></html>{{end}}
+{{template "tabbar" .}}
+</body></html>{{end}}

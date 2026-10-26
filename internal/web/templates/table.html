@@ -1,0 +1,7 @@
+{{define "main"}}{{with .Data}}
+{{if .Fixtures}}<section aria-labelledby="fx-h"><h2 class="sec" id="fx-h"><span>Fixtures</span><small>Next {{len .Fixtures}}</small></h2>{{template "fixtures" .Fixtures}}</section>{{else}}{{template "empty" (list "No fixtures yet" "They are read from the club's fixtures page every 15 minutes.")}}{{end}}
+{{with .Standing}}<section aria-labelledby="lg-h"><h2 class="sec" id="lg-h"><span>Premier League</span><small>{{.Played}} played</small></h2>{{template "pos" .}}
+<div class="lg-wrap"><table class="lg full"><thead><tr><th scope="col"><span class="sr-only">Position</span></th><th scope="col">Club</th><th scope="col"><abbr title="Played">P</abbr></th><th scope="col"><abbr title="Won">W</abbr></th><th scope="col"><abbr title="Drawn">D</abbr></th><th scope="col"><abbr title="Lost">L</abbr></th><th scope="col"><abbr title="Goal difference">GD</abbr></th><th scope="col"><abbr title="Points">Pts</abbr></th></tr></thead>
+<tbody>{{range .Rows}}<tr{{if .Me}} class="me"{{end}}><td>{{.Pos}}</td><td><span class="nm-l">{{.Name}}</span><span class="nm-s">{{.Short}}</span></td><td>{{.P}}</td><td>{{.W}}</td><td>{{.D}}</td><td>{{.L}}</td><td>{{.GD}}</td><td>{{.Pts}}</td></tr>{{end}}</tbody></table></div>
+</section>{{else}}<p class="note">{{.Why}}</p>{{end}}
+{{end}}{{end}}

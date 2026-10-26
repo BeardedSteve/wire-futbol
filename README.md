@@ -27,9 +27,9 @@ Everything is stored as JSON in a Railway bucket (or a local directory). A sourc
 | `internal/squad` | FPL import and squad stats |
 | `internal/push` | Web push: encryption, VAPID, subscriptions |
 | `internal/store` | Bucket (S3 API) and local directory storage |
-| `internal/web` | Handlers, templates, static files |
+| `internal/web` | Handlers, templates, static files. Pages, routes and the htmx contract are in `docs/design.md` |
 
-There are no third-party Go modules. The standard library covers HTTP, templates, XML, JSON, crypto and logging.
+There are no third-party Go modules. The standard library covers HTTP, templates, XML, JSON, crypto and logging. The browser gets htmx and self-hosted fonts, listed in `internal/web/licenses`.
 
 ## Run it locally
 

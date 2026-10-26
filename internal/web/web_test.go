@@ -93,11 +93,12 @@ func TestPagesRenderWithoutInlineCode(t *testing.T) {
 	s, _ := testServer(t, true)
 	h := s.Handler()
 	pages := map[string][]string{
-		"/":         {"Liverpool FC news", `class="story`, "Fixtures", "Club</a>"},
-		"/filtered": {"Kept out", "Why things were kept out", `data-w="100"`},
-		"/status":   {"Schedule and alerts", "liverpoolfc.com", "Refreshed", "gemini-3.8-flash"},
-		"/squad":    {"Out now", "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai"},
-		"/shorts":   {"Shorts", "The Anfield Wrap and Fabrizio Romano"},
+		"/":       {`class="story`, "NEXT UP", "Brighton &amp; Hove Albion", "Treatment room", "Standing", "Confirmed", "Unconfirmed", `aria-current="true"><b>100</b>All`},
+		"/spiked": {"Why spiked", "Any reason", `name="bucket" value="promo"`},
+		"/status": {"Schedule and alerts", "liverpoolfc.com", "Refreshed", "gemini-3.8-flash"},
+		"/squad":  {`class="si si-inj"`, `class="si si-doubt"`, `<div class="med">`, `id="p-`, "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai", `hx-get="/squad/player/`},
+		"/table":  {"Premier League", `class="me"`, "Form", "Carabao Cup"},
+		"/shorts": {"Shorts", "The Anfield Wrap and Fabrizio Romano", `class="tabbar"`, `href="/shorts" hx-boost="false" aria-current="page"`},
 	}
 	for path, want := range pages {
 		r := get(t, h, "lfc.wire.futbol", path)
@@ -122,26 +123,148 @@ func TestPagesRenderWithoutInlineCode(t *testing.T) {
 		if strings.Contains(html, "Something went wrong") || strings.Contains(html, "LFC Wire") == false {
 			t.Errorf("%s: render problem", path)
 		}
+		seen := map[string]bool{}
+		for _, m := range idAttr.FindAllStringSubmatch(html, -1) {
+			if seen[m[1]] {
+				t.Errorf("%s: duplicate id %q", path, m[1])
+			}
+			seen[m[1]] = true
+		}
 	}
 }
 
-func TestSquadData(t *testing.T) {
+var idAttr = regexp.MustCompile(`\sid="([^"]+)"`)
+
+func hx(t *testing.T, h http.Handler, path, target string) *http.Response {
+	t.Helper()
+	r := httptest.NewRequest("GET", path, nil)
+	r.Host = "lfc.wire.futbol"
+	r.Header.Set("HX-Request", "true")
+	r.Header.Set("HX-Target", target)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w.Result()
+}
+
+func TestFragments(t *testing.T) {
 	s, _ := testServer(t, true)
-	html := body(get(t, s.Handler(), "lfc.wire.futbol", "/squad"))
-	m := regexp.MustCompile(`(?s)<script type="application/json" id="sq-data">(.*?)</script>`).FindStringSubmatch(html)
-	if m == nil {
-		t.Fatal("no squad data")
+	h := s.Handler()
+
+	r := hx(t, h, "/?desk=fitness", "feedzone")
+	f := body(r)
+	if !strings.HasPrefix(f, `<div id="feedzone">`) || strings.Contains(f, "<html") || !strings.Contains(f, `hx-swap-oob="true">P110<`) || !strings.Contains(r.Header.Get("Vary"), "HX-Target") {
+		t.Errorf("desk fragment: %.200s", f)
 	}
-	var d struct {
-		Club  string                       `json:"club"`
-		Pools map[string][]json.RawMessage `json:"pools"`
-		Mine  map[string]json.RawMessage   `json:"mine"`
+	if strings.Count(f, `class="story`) == 0 || strings.Contains(f, "Transfer</span>") {
+		t.Error("fitness desk should hold only fitness stories")
 	}
-	if err := json.Unmarshal([]byte(m[1]), &d); err != nil {
-		t.Fatalf("squad JSON: %v\n%.200s", err, m[1])
+	if full := body(get(t, h, "lfc.wire.futbol", "/?desk=fitness")); !strings.Contains(full, "<html") || !strings.Contains(full, ">P110<") || strings.Contains(full, "hx-swap-oob") {
+		t.Error("a desk loaded directly is a whole page numbered 110")
 	}
-	if d.Club != "LIV" || len(d.Pools) != 4 || len(d.Mine) == 0 {
-		t.Fatalf("%+v", d)
+	if body(get(t, h, "lfc.wire.futbol", "/?desk=nonsense")) == "" {
+		t.Error("unknown desk")
+	}
+
+	res := body(hx(t, h, "/spiked?q=ticket&bucket=promo", "spiked-results"))
+	if !strings.HasPrefix(res, `<div id="spiked-results">`) || !regexp.MustCompile(`\d+ match`).MatchString(res) {
+		t.Errorf("spiked fragment: %.200s", res)
+	}
+	if !strings.Contains(body(get(t, h, "lfc.wire.futbol", "/spiked?bucket=promo")), `value="promo" checked`) {
+		t.Error("the chosen reason should be checked when the URL is loaded directly")
+	}
+
+	page := body(get(t, h, "lfc.wire.futbol", "/squad"))
+	id := regexp.MustCompile(`hx-get="/squad/player/(\d+)"`).FindStringSubmatch(page)[1]
+	strips := body(get(t, h, "lfc.wire.futbol", "/squad/player/"+id))
+	if strings.Count(strips, `class="strip"`) != 5 || !strings.Contains(strips, `class="me"`) || !strings.Contains(strips, "data-t=") || strings.Contains(strips, "<html") {
+		t.Errorf("strips: %.300s", strips)
+	}
+	if r := get(t, h, "lfc.wire.futbol", "/squad/player/1"); r.StatusCode != 404 {
+		t.Errorf("another club's player: %d", r.StatusCode)
+	}
+
+	idle := body(get(t, h, "lfc.wire.futbol", "/fragments/pulse?run=x&n=999"))
+	if !strings.Contains(idle, `hx-trigger="every 120s"`) || strings.Contains(idle, "toast") {
+		t.Errorf("pulse with nothing new: %s", idle)
+	}
+	if fresh := body(get(t, h, "lfc.wire.futbol", "/fragments/pulse?run=2020-01-01T00:00:00.000Z&n=3")); !strings.Contains(fresh, "new stories") {
+		t.Errorf("pulse after a new run: %s", fresh)
+	}
+}
+
+// The board follows the fixture calendar. Liverpool play Brighton at 14:00 on Sunday 25 October 2026 and won 2-1
+// at Brentford on Saturday 17 October.
+func TestBoardPhases(t *testing.T) {
+	s, _ := testServer(t, true)
+	h := s.Handler()
+	for _, c := range []struct {
+		at   string
+		want []string
+		not  []string
+	}{
+		{"2026-10-23T08:30:00Z", []string{"NEXT UP", `data-u="d"`, "T-minus", "Out</span>", "Doubtful</span>"}, []string{`data-u="s"`}},
+		{"2026-10-25T10:20:00Z", []string{"MATCHDAY", `data-u="s"`}, []string{`data-u="d"`}},
+		{"2026-10-25T14:57:00Z", []string{"LIVE NOW", "T+<span data-elapsed>57</span>", "Follow on LIVERPOOLFC.COM"}, []string{"T-minus"}},
+		{"2026-10-17T16:45:00Z", []string{"FULL TIME", ">BRENTFORD<", ">LIVERPOOL<", ">1<", ">2<", "Next</span>v BRIGHTON"}, []string{"T-minus"}},
+	} {
+		at, _ := time.Parse(time.RFC3339, c.at)
+		s.now = func() time.Time { return at }
+		b := body(get(t, h, "lfc.wire.futbol", "/"))
+		i := strings.Index(b, `<section class="board`)
+		if i < 0 {
+			t.Errorf("%s: no board", c.at)
+			continue
+		}
+		b = b[i : i+strings.Index(b[i:], "</section>")]
+		for _, w := range c.want {
+			if !strings.Contains(b, w) {
+				t.Errorf("%s: board missing %q", c.at, w)
+			}
+		}
+		for _, w := range c.not {
+			if strings.Contains(b, w) {
+				t.Errorf("%s: board shouldn't have %q", c.at, w)
+			}
+		}
+	}
+}
+
+func TestAssetsAreFingerprintedAndCompressed(t *testing.T) {
+	s, _ := testServer(t, false)
+	h := s.Handler()
+	css := string(s.assets["wire.css"].body)
+	if strings.Contains(css, "/static/Bedstead.woff2") || !strings.Contains(css, s.assets["Bedstead.woff2"].path) {
+		t.Error("stylesheet should point at the fingerprinted fonts")
+	}
+	r := httptest.NewRequest("GET", s.assets["wire.css"].path, nil)
+	r.Host = "lfc.wire.futbol"
+	r.Header.Set("Accept-Encoding", "gzip, br")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Header().Get("Content-Encoding") != "gzip" || w.Body.Len() >= len(s.assets["wire.css"].body) {
+		t.Errorf("css not compressed: %v", w.Header())
+	}
+	r = httptest.NewRequest("GET", "/", nil)
+	r.Host = "lfc.wire.futbol"
+	r.Header.Set("Accept-Encoding", "gzip")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	z, err := gzip.NewReader(w.Body)
+	if err != nil || w.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatalf("page not compressed: %v", err)
+	}
+	if b, _ := io.ReadAll(z); !strings.Contains(string(b), "</html>") {
+		t.Error("compressed page doesn't decode")
+	}
+	font := get(t, h, "lfc.wire.futbol", s.assets["Bedstead.woff2"].path)
+	if font.Header.Get("Content-Type") != "font/woff2" || font.Header.Get("Content-Encoding") != "" {
+		t.Errorf("font headers %v", font.Header)
+	}
+	if !strings.Contains(csp, "font-src 'self'") || strings.Contains(csp, "googleapis") {
+		t.Error("fonts are self-hosted")
+	}
+	if onColour("#C8102E") != "#fff" || onColour("#F2B705") != "#14110e" {
+		t.Error("text colour on the club colour")
 	}
 }
 
@@ -165,7 +288,7 @@ func TestEmptyStoreRenders(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := s.Handler()
-	for _, p := range []string{"/", "/filtered", "/status", "/squad"} {
+	for _, p := range []string{"/", "/spiked", "/status", "/squad", "/table", "/fragments/pulse"} {
 		if r := get(t, h, "localhost", p); r.StatusCode != 200 {
 			t.Errorf("%s: %d", p, r.StatusCode)
 		}
@@ -213,7 +336,10 @@ func TestHeadersRoutingAndClubResolution(t *testing.T) {
 			t.Errorf("%s: %d", p, r.StatusCode)
 		}
 	}
-	css := s.assets["app.css"].path
+	if r := get(t, h, "lfc.wire.futbol", "/filtered"); r.StatusCode != 301 || r.Header.Get("Location") != "/spiked" {
+		t.Errorf("old kept-out page: %d %s", r.StatusCode, r.Header.Get("Location"))
+	}
+	css := s.assets["wire.css"].path
 	if r := get(t, h, "lfc.wire.futbol", css); r.StatusCode != 200 || !strings.Contains(r.Header.Get("Cache-Control"), "immutable") {
 		t.Errorf("asset %s: %d", css, r.StatusCode)
 	}
