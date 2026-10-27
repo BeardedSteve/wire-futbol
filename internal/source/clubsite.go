@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	// newsPathRe takes /news/<slug> (liverpoolfc.com) and /news/<yyyy>/<month>/<d>/<slug> (avfc.co.uk), relative or on the site's own origin.
-	newsPathRe  = `href="(?:%s)?(/news/(?:\d{4}/[a-z]+/\d{1,2}/)?[a-z0-9-]+)"`
+	// newsPathRe takes /news/<slug> (liverpoolfc.com), /news/<yyyy>/<month>/<d>/<slug> (avfc.co.uk) and /news/<slug>-<mixed-case id>
+	// (arsenal.com), relative or on the site's own origin.
+	newsPathRe  = `href="(?:%s)?(/news/(?:\d{4}/[a-z]+/\d{1,2}/)?[a-z0-9-]+(?:-[A-Za-z0-9]{12})?)"`
 	datePubRe   = regexp.MustCompile(`"datePublished":"([^"]+)"`)
 	ldJSONRe    = regexp.MustCompile(`(?s)<script[^>]*application/ld\+json[^>]*>(.*?)</script>`)
 	metaContent = func(name string) *regexp.Regexp {

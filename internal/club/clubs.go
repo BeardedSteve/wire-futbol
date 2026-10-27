@@ -20,6 +20,14 @@ var Sources = map[string]Source{
 	"bbc-avfc":      {Key: "bbc-avfc", Name: "BBC Sport", Short: "BBC", Kind: RSS, URL: "https://feeds.bbci.co.uk/sport/football/teams/aston-villa/rss.xml"},
 	"mail":          {Key: "mail", Name: "Birmingham Mail", Short: "Mail", Kind: RSS, URL: "https://www.birminghammail.co.uk/all-about/aston-villa-fc?service=rss"},
 	"athletic-avfc": {Key: "athletic-avfc", Name: "The Athletic", Short: "Athletic", Kind: RSS, URL: "https://www.nytimes.com/athletic/rss/football/aston-villa/"},
+	"afc": {
+		Key: "afc", Name: "arsenal.com", Short: "Club", Kind: ClubSite,
+		URL: "https://www.arsenal.com/news", SiteBase: "https://www.arsenal.com",
+	},
+	"sky-afc":      {Key: "sky-afc", Name: "Sky Sports", Short: "Sky", Kind: RSS, URL: "https://www.skysports.com/rss/11670"},
+	"bbc-afc":      {Key: "bbc-afc", Name: "BBC Sport", Short: "BBC", Kind: RSS, URL: "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml"},
+	"fl-afc":       {Key: "fl-afc", Name: "football.london", Short: "FL", Kind: RSS, URL: "https://www.football.london/arsenal-fc/?service=rss"},
+	"athletic-afc": {Key: "athletic-afc", Name: "The Athletic", Short: "Athletic", Kind: RSS, URL: "https://www.nytimes.com/athletic/rss/football/arsenal/"},
 }
 
 // Clubs is every club the wire knows about. Only enabled clubs are served or polled.
@@ -83,6 +91,36 @@ var Clubs = []Club{
 			Example:       "Watkins is out of Saturday's game against Arsenal with a hamstring injury, the club confirms.",
 			OutletExample: "The Mail",
 			Manager:       "Emery",
+		},
+	},
+	{
+		Slug:        "afc",
+		Name:        "Arsenal",
+		Short:       "Arsenal",
+		Mark:        "AFC",
+		Hosts:       []string{"afc.wire.futbol"},
+		Enabled:     false,
+		Official:    "afc",
+		Sources:     []string{"afc", "sky-afc", "bbc-afc", "fl-afc", "athletic-afc"},
+		ReadsLine:   "arsenal.com, BBC Sport, Sky Sports, The Athletic and football.london",
+		FixtureName: "Arsenal",
+		FPLTeam:     "ARS",
+		Shorts: []Channel{
+			{ID: "UCpryVRk_VDudG8SHXgWcG0w", Name: "Arsenal"},
+			{ID: "UCBTy8j2cPy6zw68godcE7MQ", Name: "AFTV"},
+			{ID: "UCP3zb4MT_hZIRIUy6Vtqakw", Name: "The Arsenal Opinion"},
+			{ID: "UCzRsAOX41Te103Y5m7t95mQ", Name: "ArsenalVision"},
+		},
+		Colours: Colours{
+			Accent: "#EF0107", AccentText: "#C40008", AccentWash: "#FDE8E9",
+			AccentDark: "#FF4D55", AccentTextDark: "#FF6B72", AccentWashDark: "#3A1618",
+		},
+		Prompt: Prompt{
+			Outlets:       "arsenal.com, Sky Sports, BBC Sport, football.london, The Athletic",
+			Journalists:   "Ornstein, McNicholas, football.london's own reporting",
+			Example:       "Saka is out of Sunday's game against Chelsea with a hamstring injury, the club confirms.",
+			OutletExample: "football.london",
+			Manager:       "Arteta",
 		},
 	},
 }

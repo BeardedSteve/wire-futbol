@@ -95,6 +95,15 @@ func TestClubSiteDatedLinks(t *testing.T) {
 	}
 }
 
+func TestClubSiteIDLinks(t *testing.T) {
+	index := []byte(`<a href="/news/every-word-from-artetas-post-everton-press-conference-a35Bj5F4a2lz">x</a><a href="/news/Upper-Case">no</a>`)
+	got := NewsLinks(index, "https://www.arsenal.com")
+	want := []string{"https://www.arsenal.com/news/every-word-from-artetas-post-everton-press-conference-a35Bj5F4a2lz"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("links %v", got)
+	}
+}
+
 func TestParseFixtures(t *testing.T) {
 	page := []byte(`<script type="application/ld+json">{"@type":"ItemList","itemListElement":[
 {"@type":"SportsEvent","startDate":"2026-11-01T15:00:00Z","url":"https://www.liverpoolfc.com/matches/2026-27/premier-league/x","homeTeam":{"name":"Liverpool"},"awayTeam":{"name":"Aston Villa"},"location":{"name":"Anfield"}},
