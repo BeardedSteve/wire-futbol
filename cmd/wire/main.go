@@ -57,6 +57,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: wire serve|poll|squad")
 		os.Exit(2)
 	}
+	if v := os.Getenv("ENABLE_CLUBS"); v != "" {
+		if unknown := club.Enable(strings.Split(v, ",")); len(unknown) > 0 {
+			slog.Warn("ENABLE_CLUBS lists unknown clubs", "slugs", unknown)
+		}
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

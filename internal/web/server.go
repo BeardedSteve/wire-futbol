@@ -226,12 +226,34 @@ func (s *Server) withClub(next http.Handler) http.Handler {
 			}
 		}
 		c := s.cfg.Resolver.Resolve(host)
+		if club.Pickable(host) {
+			w.Header().Add("Vary", "Cookie")
+			if p := pickedClub(w, r); p != nil {
+				c = p
+			}
+		}
 		if c == nil {
 			http.NotFound(w, r)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, c)))
 	})
+}
+
+// pickedClub reads ?club=<slug>, remembering it in a cookie so later pages, htmx requests and API calls keep it,
+// or else the cookie. Unknown and disabled slugs are ignored.
+func pickedClub(w http.ResponseWriter, r *http.Request) *club.Club {
+	if slug := r.URL.Query().Get("club"); slug != "" {
+		c := club.BySlug(slug)
+		if c != nil {
+			http.SetCookie(w, &http.Cookie{Name: "club", Value: c.Slug, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		}
+		return c
+	}
+	if ck, err := r.Cookie("club"); err == nil {
+		return club.BySlug(ck.Value)
+	}
+	return nil
 }
 
 const csp = "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; " +

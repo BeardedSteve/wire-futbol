@@ -103,6 +103,24 @@ func BySlug(slug string) *Club {
 	return nil
 }
 
+// Enable switches on the listed clubs, from ENABLE_CLUBS, so staging can serve and poll clubs that are off in production.
+// It returns the slugs it doesn't know.
+func Enable(slugs []string) (unknown []string) {
+	for _, slug := range slugs {
+		slug = strings.TrimSpace(slug)
+		found := false
+		for i := range Clubs {
+			if Clubs[i].Slug == slug {
+				Clubs[i].Enabled, found = true, true
+			}
+		}
+		if !found {
+			unknown = append(unknown, slug)
+		}
+	}
+	return unknown
+}
+
 // Resolver maps a Host header to a club.
 type Resolver struct {
 	Default string // slug served on hosts outside wire.futbol, such as a railway.app domain or localhost
@@ -123,6 +141,13 @@ func (r Resolver) Resolve(host string) *Club {
 		return nil
 	}
 	return BySlug(r.Default)
+}
+
+// Pickable says whether a visitor may choose the club on this host with ?club=. Only hosts outside wire.futbol,
+// such as a railway.app domain or localhost, so staging can show every club on one address.
+func Pickable(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(stripPort(host), "."))
+	return host != "wire.futbol" && !strings.HasSuffix(host, ".wire.futbol")
 }
 
 func stripPort(h string) string {

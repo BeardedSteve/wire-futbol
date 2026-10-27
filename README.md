@@ -50,6 +50,7 @@ Container: `docker build -f deploy/Dockerfile -t wire-futbol .` then `docker run
 |---|---|---|
 | `PORT` | serve | 3000 |
 | `DEFAULT_CLUB` | serve | none |
+| `ENABLE_CLUBS` | serve, poll, staging only: comma-separated slugs of clubs to switch on, such as `avfc,afc` | none |
 | `CANONICAL_HOST` | serve: redirects page views on `*.up.railway.app` | none |
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION`, `S3_VIRTUAL_HOSTED` | all | local `./data` |
 | `DATA_DIR` | all, without a bucket | `./data` |
@@ -77,14 +78,15 @@ A source listed by several clubs is fetched once and its items go to each club's
 
 1. Add a `Club` to `Clubs` in `internal/club/clubs.go`: slug, names, mark, host (`<slug>.wire.futbol`), sources, fixtures page, FPL team short name (for example `ARS`), Shorts channels, colours and prompt details. Leave `Enabled: false`.
 2. Run `go test ./...`.
-3. Turn on `Enabled`, deploy, and add the custom domain to the web service on Railway.
+3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services, then open `https://web-go-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
+4. Turn on `Enabled`, deploy, and add the custom domain to the web service on Railway.
 
 ## Branches and environments
 
 | Branch | Railway environment | Runs |
 |---|---|---|
 | `production` | production | Go app, built from `deploy/Dockerfile` |
-| `claude/youthful-pascal-r6sggv` | `wire-futbol-go-staging` project | Go app, built from `deploy/Dockerfile` |
+| `main` | `wire-futbol-go-staging` project | Go app, built from `deploy/Dockerfile` |
 
 ## CI
 

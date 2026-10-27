@@ -170,11 +170,25 @@ func stamp(t time.Time) string { return t.In(wire.London).Format("Mon 2 Jan, 15:
 
 // Classify decides a batch of pending items. recent holds kept items from the last 48 hours, newest first; newly
 // kept items are added to its front. It returns false when the model could not be used, leaving items pending.
+//
+// A batch Gemini rejects as a bad request is split in half and retried, so one bad item or an oversized request
+// can't leave a club's backlog pending for good. If the first half is rejected too, the rest waits for the next run.
 func (f *Filter) Classify(ctx context.Context, c *club.Club, batch []*wire.Item, recent *[]*wire.Item, st *wire.State) bool {
+	ok, rejected := f.classify(ctx, c, batch, recent, st)
+	if ok || !rejected || len(batch) < 2 {
+		return ok
+	}
+	half := len(batch) / 2
+	slog.Warn("gemini rejected batch, splitting", "club", c.Slug, "size", len(batch))
+	return f.Classify(ctx, c, batch[:half], recent, st) && f.Classify(ctx, c, batch[half:], recent, st)
+}
+
+// classify makes one model call for batch. rejected is true when Gemini answered 400.
+func (f *Filter) classify(ctx context.Context, c *club.Club, batch []*wire.Item, recent *[]*wire.Item, st *wire.State) (ok, rejected bool) {
 	log := slog.With("club", c.Slug)
 	if f.APIKey == "" {
 		log.Info("no GEMINI_API_KEY, leaving items pending")
-		return false
+		return false, false
 	}
 	day := wire.Day(f.now())
 	u := st.Usage[day]
@@ -184,7 +198,7 @@ func (f *Filter) Classify(ctx context.Context, c *club.Club, batch []*wire.Item,
 	}
 	if u.In+u.Out > f.DailyCap {
 		log.Info("daily token cap reached, leaving items pending")
-		return false
+		return false, false
 	}
 
 	top := *recent
@@ -241,10 +255,10 @@ func (f *Filter) Classify(ctx context.Context, c *club.Club, batch []*wire.Item,
 		code, body, err = f.call(ctx, system, prompt, sch, true)
 	}
 	if err != nil {
-		return fail(err.Error())
+		return fail(err.Error()), false
 	}
 	if code != 200 {
-		return fail(fmt.Sprintf("HTTP %d %s", code, clip(string(body), 300)))
+		return fail(fmt.Sprintf("HTTP %d %s", code, clip(string(body), 300))), code == 400
 	}
 	var resp struct {
 		Candidates []struct {
@@ -263,7 +277,7 @@ func (f *Filter) Classify(ctx context.Context, c *club.Club, batch []*wire.Item,
 		} `json:"usageMetadata"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return fail("response was not JSON")
+		return fail("response was not JSON"), false
 	}
 	u.In += resp.Usage.Prompt
 	u.Out += resp.Usage.Candidates + resp.Usage.Thoughts
@@ -282,11 +296,11 @@ func (f *Filter) Classify(ctx context.Context, c *club.Club, batch []*wire.Item,
 		Results []result `json:"results"`
 	}
 	if err := json.Unmarshal([]byte(text.String()), &out); err != nil {
-		return fail("unparseable JSON (" + finish + ")")
+		return fail("unparseable JSON (" + finish + ")"), false
 	}
 	st.ModelError = ""
 	Apply(batch, out.Results, recent)
-	return true
+	return true, false
 }
 
 // Apply records the model's verdicts on batch. Unknown or repeated ids are ignored; an item with no verdict stays
