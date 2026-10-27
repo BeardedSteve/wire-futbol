@@ -94,10 +94,11 @@ wire store rm key...        # deletes keys; a missing key is fine
 To run it, for example to rebuild a club's wire after a parser fix by deleting `<club>/state.json`:
 
 1. Create an empty service named `store-admin` in the project and environment.
-2. Give it variables that reference the shared ones: `S3_BUCKET=${{shared.S3_BUCKET}}`, and the same for `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION`, `S3_VIRTUAL_HOSTED` and `RAILWAY_DOCKERFILE_PATH`.
-3. Set its start command to `/wire store ls` (or `/wire store rm ...`) and its restart policy to never.
-4. Connect it to this repo on a branch that has `wire store`. It builds, runs once and exits. Read the result in its deploy logs.
-5. Delete the service.
+2. Give it variables that reference the bucket (staging's is `wire-go-store`): `S3_BUCKET=${{wire-go-store.BUCKET}}`, `S3_ACCESS_KEY_ID=${{wire-go-store.ACCESS_KEY_ID}}`, `S3_SECRET_ACCESS_KEY=${{wire-go-store.SECRET_ACCESS_KEY}}`, `S3_ENDPOINT=${{wire-go-store.ENDPOINT}}`, `S3_REGION=${{wire-go-store.REGION}}`, `S3_VIRTUAL_HOSTED=true`, plus `RAILWAY_DOCKERFILE_PATH=${{shared.RAILWAY_DOCKERFILE_PATH}}`. `${{shared.S3_*}}` references come through empty, and the run then falls back to `./data`: check that the log line `store` says `"kind":"bucket"`.
+3. Set its start command to `/wire store ls` and its restart policy to never.
+4. Connect it to this repo on a branch that has `wire store`. It builds, runs once and exits. Read the keys in its deploy logs.
+5. For `rm`, change the start command, then change any variable on the service (for example `STORE_RUN=rm-1`) to start a new deployment. A plain redeploy reuses the previous deployment's start command.
+6. Delete the service, so a later push to its branch can't run `rm` again.
 
 Run `ls` first and check the keys before `rm`. Locally, `wire store` uses `./data` unless `S3_*` variables are set, so unset any that point at another bucket.
 
