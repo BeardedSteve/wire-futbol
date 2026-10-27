@@ -87,12 +87,12 @@ A source listed by several clubs is fetched once and its items go to each club's
 
 1. Add a `Club` to `Clubs` in `internal/club/clubs.go`: slug, names, mark, host (`<slug>.wire.futbol`), sources, fixtures page, FPL team short name (for example `ARS`), Shorts channels, colours and prompt details. Leave `Enabled: false`.
 2. Run `go test ./...`.
-3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services. The poller restarts and polls the new club straight away. Then open `https://web-go-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
+3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services. The poller restarts and polls the new club straight away. Then open `https://wire-web-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
 4. Turn on `Enabled`, deploy, add `<slug>.wire.futbol` as a custom domain on the production `wire-web` service, and add the CNAME and `_railway-verify` TXT records Railway gives you to the wire.futbol zone at Namecheap.
 
 ## Bucket maintenance
 
-The bucket keys only exist in each Railway project's shared variables, so objects are listed and deleted from a
+The bucket keys only exist in each Railway environment's shared variables, so objects are listed and deleted from a
 one-off service that runs `wire store`:
 
 ```sh
@@ -102,8 +102,8 @@ wire store rm key...        # deletes keys; a missing key is fine
 
 To run it, for example to rebuild a club's wire after a parser fix by deleting `<club>/state.json` (then redeploy the poller and it rebuilds the club at once):
 
-1. Create an empty service named `store-admin` in the project and environment.
-2. Give it variables that reference the bucket (staging's is `wire-go-store`): `S3_BUCKET=${{wire-go-store.BUCKET}}`, `S3_ACCESS_KEY_ID=${{wire-go-store.ACCESS_KEY_ID}}`, `S3_SECRET_ACCESS_KEY=${{wire-go-store.SECRET_ACCESS_KEY}}`, `S3_ENDPOINT=${{wire-go-store.ENDPOINT}}`, `S3_REGION=${{wire-go-store.REGION}}`, `S3_VIRTUAL_HOSTED=true`, plus `RAILWAY_DOCKERFILE_PATH=${{shared.RAILWAY_DOCKERFILE_PATH}}`. `${{shared.S3_*}}` references come through empty, and the run then falls back to `./data`: check that the log line `store` says `"kind":"bucket"`.
+1. Create an empty service named `store-admin` in the `wire-futbol` project, in the environment whose bucket you want.
+2. Give it variables that reference the bucket, `wire-store` in both environments: `S3_BUCKET=${{wire-store.BUCKET}}`, `S3_ACCESS_KEY_ID=${{wire-store.ACCESS_KEY_ID}}`, `S3_SECRET_ACCESS_KEY=${{wire-store.SECRET_ACCESS_KEY}}`, `S3_ENDPOINT=${{wire-store.ENDPOINT}}`, `S3_REGION=${{wire-store.REGION}}`, `S3_VIRTUAL_HOSTED=true`, plus `RAILWAY_DOCKERFILE_PATH=${{shared.RAILWAY_DOCKERFILE_PATH}}`. `${{shared.S3_*}}` references come through empty, and the run then falls back to `./data`: check that the log line `store` says `"kind":"bucket"`.
 3. Set its start command to `/wire store ls` and its restart policy to never.
 4. Connect it to this repo on a branch that has `wire store`. It builds, runs once and exits. Read the keys in its deploy logs.
 5. For `rm`, change the start command, then change any variable on the service (for example `STORE_RUN=rm-1`) to start a new deployment. A plain redeploy reuses the previous deployment's start command.
@@ -113,10 +113,12 @@ Run `ls` first and check the keys before `rm`. Locally, `wire store` uses `./dat
 
 ## Branches and environments
 
-| Branch | Railway environment | Runs |
+One Railway project, `wire-futbol`, with the same two services in each environment: `wire-web` (`/wire serve`) and `wire-poller` (`/wire work`). Both build from `deploy/Dockerfile`. Each environment has its own `wire-store` bucket.
+
+| Branch | Environment | URLs |
 |---|---|---|
-| `production` | production | Go app, built from `deploy/Dockerfile` |
-| `main` | `wire-futbol-go-staging` project | Go app, built from `deploy/Dockerfile` |
+| `production` | production | `lfc.wire.futbol`, `avfc.wire.futbol`, `afc.wire.futbol` |
+| `main` | staging | `wire-web-staging.up.railway.app`, `?club=` picks the club |
 
 ## CI
 
