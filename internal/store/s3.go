@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,16 +41,21 @@ func (s *S3) objectURL(key string) (*url.URL, error) {
 		}
 		u.Path = "/" + key
 	} else {
-		u.Path = "/" + s.Bucket + "/" + key
+		u.Path = strings.TrimSuffix("/"+s.Bucket+"/"+key, "/") // the bucket itself, for a list, has no trailing slash
 	}
 	return u, nil
 }
 
 func (s *S3) do(ctx context.Context, method, key string, body []byte, contentType string) (*http.Response, error) {
+	return s.doQuery(ctx, method, key, nil, body, contentType)
+}
+
+func (s *S3) doQuery(ctx context.Context, method, key string, query url.Values, body []byte, contentType string) (*http.Response, error) {
 	u, err := s.objectURL(key)
 	if err != nil {
 		return nil, err
 	}
+	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -100,6 +106,64 @@ func (s *S3) Put(ctx context.Context, key string, body []byte, contentType strin
 		return fmt.Errorf("put %s: HTTP %d %s", key, r.StatusCode, msg)
 	}
 	return nil
+}
+
+// Delete removes an object. A missing object is not an error.
+func (s *S3) Delete(ctx context.Context, key string) error {
+	r, err := s.do(ctx, http.MethodDelete, key, nil, "")
+	if err != nil {
+		return err
+	}
+	defer r.Body.Close()
+	if r.StatusCode/100 != 2 && r.StatusCode != http.StatusNotFound {
+		msg, _ := io.ReadAll(io.LimitReader(r.Body, 300))
+		return fmt.Errorf("delete %s: HTTP %d %s", key, r.StatusCode, msg)
+	}
+	return nil
+}
+
+// List returns the keys that start with prefix, in key order.
+func (s *S3) List(ctx context.Context, prefix string) ([]string, error) {
+	var keys []string
+	q := url.Values{"list-type": {"2"}, "prefix": {prefix}}
+	for {
+		r, err := s.doQuery(ctx, http.MethodGet, "", q, nil, "")
+		if err != nil {
+			return nil, err
+		}
+		b, err := io.ReadAll(io.LimitReader(r.Body, maxObject))
+		r.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		if r.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("list %s: HTTP %d %s", prefix, r.StatusCode, clipBytes(b, 300))
+		}
+		var page struct {
+			Contents []struct {
+				Key string
+			}
+			IsTruncated           bool
+			NextContinuationToken string
+		}
+		if err := xml.Unmarshal(b, &page); err != nil {
+			return nil, fmt.Errorf("list %s: %w", prefix, err)
+		}
+		for _, c := range page.Contents {
+			keys = append(keys, c.Key)
+		}
+		if !page.IsTruncated || page.NextContinuationToken == "" {
+			return keys, nil
+		}
+		q.Set("continuation-token", page.NextContinuationToken)
+	}
+}
+
+func clipBytes(b []byte, n int) []byte {
+	if len(b) > n {
+		return b[:n]
+	}
+	return b
 }
 
 // sign adds SigV4 headers. Every header already on the request is signed, plus host and the x-amz headers.

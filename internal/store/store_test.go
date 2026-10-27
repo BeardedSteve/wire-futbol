@@ -109,3 +109,51 @@ func TestRetry(t *testing.T) {
 		t.Fatalf("persistent failure: %v after %d calls", err, calls)
 	}
 }
+
+func TestS3DeleteAndList(t *testing.T) {
+	objects := map[string]bool{"/b/avfc/state.json": true, "/b/afc/state.json": true, "/b/lfc/state.json": true}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "DELETE":
+			delete(objects, r.URL.Path)
+			w.WriteHeader(204)
+		case r.Method == "GET" && r.URL.Path == "/b" && r.URL.Query().Get("list-type") == "2":
+			// two pages, to follow the continuation token
+			if r.URL.Query().Get("continuation-token") == "" {
+				io.WriteString(w, `<ListBucketResult><Contents><Key>afc/state.json</Key></Contents><IsTruncated>true</IsTruncated><NextContinuationToken>t1</NextContinuationToken></ListBucketResult>`)
+				return
+			}
+			io.WriteString(w, `<ListBucketResult><Contents><Key>avfc/state.json</Key></Contents><IsTruncated>false</IsTruncated></ListBucketResult>`)
+		default:
+			w.WriteHeader(400)
+		}
+	}))
+	defer srv.Close()
+	s := &S3{Endpoint: srv.URL, Bucket: "b", Region: "auto", AccessKey: "key", SecretKey: "secret"}
+	ctx := context.Background()
+	keys, err := s.List(ctx, "a")
+	if err != nil || strings.Join(keys, ",") != "afc/state.json,avfc/state.json" {
+		t.Fatalf("list = %v, %v", keys, err)
+	}
+	if err := s.Delete(ctx, "avfc/state.json"); err != nil || objects["/b/avfc/state.json"] || !objects["/b/lfc/state.json"] {
+		t.Fatalf("delete: %v, %v", err, objects)
+	}
+}
+
+func TestDirDeleteAndList(t *testing.T) {
+	d := Dir(t.TempDir())
+	ctx := context.Background()
+	for _, k := range []string{"avfc/state.json", "afc/state.json", "lfc/state.json"} {
+		d.Put(ctx, k, []byte("{}"), "")
+	}
+	if err := d.Delete(ctx, "avfc/state.json"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Delete(ctx, "avfc/state.json"); err != nil {
+		t.Fatalf("deleting a missing key: %v", err)
+	}
+	keys, err := d.List(ctx, "a")
+	if err != nil || strings.Join(keys, ",") != "afc/state.json" {
+		t.Fatalf("list = %v, %v", keys, err)
+	}
+}

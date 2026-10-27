@@ -87,3 +87,24 @@ func TestPickable(t *testing.T) {
 		}
 	}
 }
+
+func TestFingerprint(t *testing.T) {
+	saved := Sources
+	t.Cleanup(func() { Sources = saved })
+	Sources = map[string]Source{"a": {Key: "a", URL: "https://a/"}, "b": {Key: "b", URL: "https://b/"}}
+	c := Club{Sources: []string{"a"}, Prompt: Prompt{Manager: "X"}}
+	fp := c.Fingerprint()
+	c.Prompt.Manager = "Y"
+	if c.Fingerprint() != fp {
+		t.Fatal("prompt changes should not need a poll")
+	}
+	c.Sources = []string{"a", "b"}
+	added := c.Fingerprint()
+	if added == fp {
+		t.Fatal("added source not seen")
+	}
+	Sources["b"] = Source{Key: "b", URL: "https://b2/"}
+	if c.Fingerprint() == added {
+		t.Fatal("moved source not seen")
+	}
+}

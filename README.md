@@ -4,13 +4,22 @@ Club news wires for wire.futbol. Each club's wire reads tier 1 sources, keeps th
 
 ## How it fits together
 
-One binary, `wire`, with three commands:
+One binary, `wire`:
 
 | Command | What it does | Runs on Railway as |
 |---|---|---|
 | `wire serve` | Web service for every enabled club. The club comes from the Host header | Always-on service |
-| `wire poll` | Reads every enabled club's sources, filters new items with Gemini, sends alerts, writes `<club>/state.json` | Cron, every 15 minutes |
-| `wire squad` | Copies the Fantasy Premier League (FPL) feed into `fpl.json` for the squad pages | Cron, every 2 hours |
+| `wire work` | Runs `poll` every 15 minutes and `squad` every 2 hours | Always-on service, no cron |
+| `wire poll` | One run: reads every enabled club's sources, filters new items with Gemini, sends alerts, writes `<club>/state.json` | Under `work` |
+| `wire squad` | One run: copies the Fantasy Premier League (FPL) feed into `fpl.json` for the squad pages | Under `work` |
+
+`wire work` decides what is due from the bucket when it starts, so a deploy runs exactly what it needs to:
+
+- A club with no `state.json` (newly enabled, or deleted to rebuild it) polls straight away.
+- A club whose sources or fixtures page changed polls straight away. Each state file stores a fingerprint of the club's sources, and that run drops health for removed sources and refetches fixtures.
+- Every other club, and the squad import, keeps its schedule from its last run, so deploying twice in a row costs no extra runs.
+
+Railway cron services never run on deploy, which is why the worker replaced them.
 
 Everything is stored as JSON in a Railway bucket (or a local directory). A source used by several clubs is fetched once per run. A failing source or club never stops the others.
 
@@ -50,7 +59,7 @@ Container: `docker build -f deploy/Dockerfile -t wire-futbol .` then `docker run
 |---|---|---|
 | `PORT` | serve | 3000 |
 | `DEFAULT_CLUB` | serve | none |
-| `ENABLE_CLUBS` | serve, poll, staging only: comma-separated slugs of clubs to switch on, such as `avfc,afc` | none |
+| `ENABLE_CLUBS` | serve, work, staging only: comma-separated slugs of clubs to switch on, such as `avfc,afc` | none |
 | `CANONICAL_HOST` | serve: redirects page views on `*.up.railway.app` | none |
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION`, `S3_VIRTUAL_HOSTED` | all | local `./data` |
 | `DATA_DIR` | all, without a bucket | `./data` |
@@ -78,8 +87,29 @@ A source listed by several clubs is fetched once and its items go to each club's
 
 1. Add a `Club` to `Clubs` in `internal/club/clubs.go`: slug, names, mark, host (`<slug>.wire.futbol`), sources, fixtures page, FPL team short name (for example `ARS`), Shorts channels, colours and prompt details. Leave `Enabled: false`.
 2. Run `go test ./...`.
-3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services, then open `https://web-go-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
+3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services. The poller restarts and polls the new club straight away. Then open `https://web-go-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
 4. Turn on `Enabled`, deploy, and add the custom domain to the web service on Railway.
+
+## Bucket maintenance
+
+The bucket keys only exist in each Railway project's shared variables, so objects are listed and deleted from a
+one-off service that runs `wire store`:
+
+```sh
+wire store ls [prefix]      # logs every key under prefix
+wire store rm key...        # deletes keys; a missing key is fine
+```
+
+To run it, for example to rebuild a club's wire after a parser fix by deleting `<club>/state.json` (then redeploy the poller and it rebuilds the club at once):
+
+1. Create an empty service named `store-admin` in the project and environment.
+2. Give it variables that reference the bucket (staging's is `wire-go-store`): `S3_BUCKET=${{wire-go-store.BUCKET}}`, `S3_ACCESS_KEY_ID=${{wire-go-store.ACCESS_KEY_ID}}`, `S3_SECRET_ACCESS_KEY=${{wire-go-store.SECRET_ACCESS_KEY}}`, `S3_ENDPOINT=${{wire-go-store.ENDPOINT}}`, `S3_REGION=${{wire-go-store.REGION}}`, `S3_VIRTUAL_HOSTED=true`, plus `RAILWAY_DOCKERFILE_PATH=${{shared.RAILWAY_DOCKERFILE_PATH}}`. `${{shared.S3_*}}` references come through empty, and the run then falls back to `./data`: check that the log line `store` says `"kind":"bucket"`.
+3. Set its start command to `/wire store ls` and its restart policy to never.
+4. Connect it to this repo on a branch that has `wire store`. It builds, runs once and exits. Read the keys in its deploy logs.
+5. For `rm`, change the start command, then change any variable on the service (for example `STORE_RUN=rm-1`) to start a new deployment. A plain redeploy reuses the previous deployment's start command.
+6. Delete the service, so a later push to its branch can't run `rm` again.
+
+Run `ls` first and check the keys before `rm`. Locally, `wire store` uses `./data` unless `S3_*` variables are set, so unset any that point at another bucket.
 
 ## Branches and environments
 

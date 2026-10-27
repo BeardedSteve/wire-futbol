@@ -63,6 +63,16 @@ func Load(ctx context.Context, s store.Store) (*Data, error) {
 	return &d, nil
 }
 
+// NextRun says when the squad poll is next due: now if the store is empty or unreadable, otherwise every after the
+// last attempt.
+func NextRun(ctx context.Context, s store.Store, every time.Duration, now time.Time) time.Time {
+	d, err := Load(ctx, s)
+	if err != nil || len(d.Runs) == 0 {
+		return now
+	}
+	return d.Runs[0].At.Add(every)
+}
+
 // Save writes the squad store.
 func Save(ctx context.Context, s store.Store, d *Data) error {
 	b, err := json.Marshal(d)
