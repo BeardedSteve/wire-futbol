@@ -439,3 +439,36 @@ func TestStaticScriptsParse(t *testing.T) {
 		}
 	}
 }
+
+func TestPickClubOffWireFutbol(t *testing.T) {
+	saved := club.Clubs
+	t.Cleanup(func() { club.Clubs = saved })
+	club.Clubs = append([]club.Club{}, saved...)
+	club.Enable([]string{"avfc"})
+	s, _ := testServer(t, false)
+	h := s.Handler()
+	css := func(host, path, cookie string) (string, *http.Response) {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Host = host
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: "club", Value: cookie})
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		b, _ := io.ReadAll(w.Result().Body)
+		return string(b), w.Result()
+	}
+	body, res := css("localhost:3000", "/club.css?club=avfc", "")
+	if !strings.Contains(body, "#670E36") || !strings.Contains(res.Header.Get("Set-Cookie"), "club=avfc") {
+		t.Fatalf("pick: %q, cookie %q", body, res.Header.Get("Set-Cookie"))
+	}
+	if body, _ := css("localhost:3000", "/club.css", "avfc"); !strings.Contains(body, "#670E36") {
+		t.Fatalf("cookie: %q", body)
+	}
+	if body, _ := css("localhost:3000", "/club.css?club=afc", ""); !strings.Contains(body, "#C8102E") {
+		t.Fatalf("disabled club picked: %q", body)
+	}
+	if body, res := css("lfc.wire.futbol", "/club.css?club=avfc", "avfc"); !strings.Contains(body, "#C8102E") || res.Header.Get("Set-Cookie") != "" {
+		t.Fatalf("pick honoured on wire.futbol: %q", body)
+	}
+}
