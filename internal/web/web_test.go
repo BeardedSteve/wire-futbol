@@ -28,7 +28,7 @@ import (
 
 func gz(t *testing.T, name string) []byte {
 	t.Helper()
-	f, err := os.Open("../../test/fixtures/" + name)
+	f, err := os.Open("../../testdata/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestPagesRenderWithoutInlineCode(t *testing.T) {
 		"/status": {"Schedule and alerts", "liverpoolfc.com", "Refreshed", "gemini-3.8-flash"},
 		"/squad":  {`class="si si-inj"`, `class="si si-doubt"`, `<div class="med">`, `id="p-`, "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai", `hx-get="/squad/player/`},
 		"/table":  {"Premier League", `class="me"`, "Form", "Carabao Cup"},
-		"/shorts": {"Shorts", "The Anfield Wrap and Fabrizio Romano", `class="tabbar"`, `href="/shorts" hx-boost="false" aria-current="page"`},
+		"/shorts": {"Shorts", "The Redmen TV and The Anfield Wrap", `class="tabbar"`, `href="/shorts" hx-boost="false" aria-current="page"`},
 	}
 	for path, want := range pages {
 		r := get(t, h, "lfc.wire.futbol", path)
@@ -437,5 +437,38 @@ func TestStaticScriptsParse(t *testing.T) {
 		if out, err := exec.Command(node, "--check", f).CombinedOutput(); err != nil {
 			t.Errorf("%s: %s", f, out)
 		}
+	}
+}
+
+func TestPickClubOffWireFutbol(t *testing.T) {
+	saved := club.Clubs
+	t.Cleanup(func() { club.Clubs = saved })
+	club.Clubs = append([]club.Club{}, saved...)
+	club.Enable([]string{"avfc"})
+	s, _ := testServer(t, false)
+	h := s.Handler()
+	css := func(host, path, cookie string) (string, *http.Response) {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Host = host
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: "club", Value: cookie})
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		b, _ := io.ReadAll(w.Result().Body)
+		return string(b), w.Result()
+	}
+	body, res := css("localhost:3000", "/club.css?club=avfc", "")
+	if !strings.Contains(body, "#670E36") || !strings.Contains(res.Header.Get("Set-Cookie"), "club=avfc") {
+		t.Fatalf("pick: %q, cookie %q", body, res.Header.Get("Set-Cookie"))
+	}
+	if body, _ := css("localhost:3000", "/club.css", "avfc"); !strings.Contains(body, "#670E36") {
+		t.Fatalf("cookie: %q", body)
+	}
+	if body, _ := css("localhost:3000", "/club.css?club=afc", ""); !strings.Contains(body, "#C8102E") {
+		t.Fatalf("disabled club picked: %q", body)
+	}
+	if body, res := css("lfc.wire.futbol", "/club.css?club=avfc", "avfc"); !strings.Contains(body, "#C8102E") || res.Header.Get("Set-Cookie") != "" {
+		t.Fatalf("pick honoured on wire.futbol: %q", body)
 	}
 }

@@ -17,6 +17,8 @@ var ErrNotFound = errors.New("not found")
 type Store interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	Put(ctx context.Context, key string, body []byte, contentType string) error
+	Delete(ctx context.Context, key string) error
+	List(ctx context.Context, prefix string) ([]string, error)
 }
 
 // FromEnv returns a bucket store when S3_BUCKET and S3_ACCESS_KEY_ID are set, otherwise a directory store at dir.
@@ -76,6 +78,40 @@ func (d Dir) Put(_ context.Context, key string, body []byte, _ string) error {
 	return os.Rename(tmp, p)
 }
 
+// Delete removes an object. A missing object is not an error.
+func (d Dir) Delete(_ context.Context, key string) error {
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// List returns the keys that start with prefix, in key order.
+func (d Dir) List(_ context.Context, prefix string) ([]string, error) {
+	var keys []string
+	err := filepath.WalkDir(string(d), func(p string, e os.DirEntry, err error) error {
+		if err != nil || e.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(string(d), p)
+		if err != nil {
+			return err
+		}
+		if k := filepath.ToSlash(rel); strings.HasPrefix(k, prefix) && !strings.HasSuffix(k, ".tmp") {
+			keys = append(keys, k)
+		}
+		return nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return keys, err
+}
+
 // retryWaits are the pauses between attempts. Railway buckets sometimes answer HTTP 408 for twenty seconds or so,
 // so the last wait outlasts that.
 var retryWaits = []time.Duration{time.Second, 4 * time.Second, 12 * time.Second, 30 * time.Second}
@@ -94,20 +130,4 @@ func Retry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 		case <-time.After(waits[i]):
 		}
 	}
-}
-
-// CopyIfAbsent copies from to to when to doesn't exist yet and from does. It never overwrites or deletes, so the
-// source stays usable by whatever wrote it.
-func CopyIfAbsent(ctx context.Context, s Store, from, to, contentType string) (bool, error) {
-	if _, err := s.Get(ctx, to); !errors.Is(err, ErrNotFound) {
-		return false, err
-	}
-	b, err := s.Get(ctx, from)
-	if errors.Is(err, ErrNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, s.Put(ctx, to, b, contentType)
 }

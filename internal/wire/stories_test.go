@@ -10,7 +10,7 @@ import (
 
 func loadFixture(t *testing.T) *State {
 	t.Helper()
-	f, err := os.Open("../../test/fixtures/state.json.gz")
+	f, err := os.Open("../../testdata/state.json.gz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func loadFixture(t *testing.T) *State {
 	return s.Init()
 }
 
-func TestReadsBunStateFile(t *testing.T) {
+func TestReadsStateFile(t *testing.T) {
 	s := loadFixture(t)
 	if len(s.Items) != 600 || s.Health["bbc"].LastCount != 24 || s.LastRun.IsZero() || s.Fixtures == nil {
 		t.Fatalf("state: %d items, health %+v", len(s.Items), s.Health["bbc"])
@@ -106,7 +106,7 @@ func TestRetain(t *testing.T) {
 }
 
 func TestID(t *testing.T) {
-	// Matches the Bun app: sha1 hex of the URL, first 12 characters.
+	// sha1 hex of the URL, first 12 characters.
 	if got := ID("https://www.liverpoolfc.com/news/jurgen-klopp-sends-message-gratitude-mini-statue-lfc-museum"); got != "61ce2893491e" {
 		t.Fatal(got)
 	}

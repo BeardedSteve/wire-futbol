@@ -2,6 +2,9 @@
 package club
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"net"
 	"strings"
 	"time"
@@ -82,6 +85,17 @@ func (c *Club) SourceList() []Source {
 	return out
 }
 
+// Fingerprint changes whenever what a poll reads for the club changes: a source added, removed or pointed
+// elsewhere, or a new fixtures page. The poller stores it with the club's state to spot a deploy that needs a run.
+func (c *Club) Fingerprint() string {
+	b, _ := json.Marshal(struct {
+		Sources               []Source
+		Fixtures, FixtureName string
+	}{c.SourceList(), c.FixturesURL, c.FixtureName})
+	h := sha1.Sum(b)
+	return hex.EncodeToString(h[:])[:12]
+}
+
 // Enabled returns the clubs that are switched on.
 func Enabled() []*Club {
 	var out []*Club
@@ -101,6 +115,24 @@ func BySlug(slug string) *Club {
 		}
 	}
 	return nil
+}
+
+// Enable switches on the listed clubs, from ENABLE_CLUBS, so staging can serve and poll clubs that are off in production.
+// It returns the slugs it doesn't know.
+func Enable(slugs []string) (unknown []string) {
+	for _, slug := range slugs {
+		slug = strings.TrimSpace(slug)
+		found := false
+		for i := range Clubs {
+			if Clubs[i].Slug == slug {
+				Clubs[i].Enabled, found = true, true
+			}
+		}
+		if !found {
+			unknown = append(unknown, slug)
+		}
+	}
+	return unknown
 }
 
 // Resolver maps a Host header to a club.
@@ -123,6 +155,13 @@ func (r Resolver) Resolve(host string) *Club {
 		return nil
 	}
 	return BySlug(r.Default)
+}
+
+// Pickable says whether a visitor may choose the club on this host with ?club=. Only hosts outside wire.futbol,
+// such as a railway.app domain or localhost, so staging can show every club on one address.
+func Pickable(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(stripPort(host), "."))
+	return host != "wire.futbol" && !strings.HasSuffix(host, ".wire.futbol")
 }
 
 func stripPort(h string) string {

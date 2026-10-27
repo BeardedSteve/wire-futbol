@@ -1,8 +1,9 @@
 // Command wire runs wire.futbol: the web service and the two pollers, one binary.
 //
 //	wire serve   web service (always on)
-//	wire poll    read sources, filter, alert, save state (cron, every 15 minutes)
-//	wire squad   copy the Fantasy Premier League feed into the store (cron, every 2 hours)
+//	wire work    runs poll and squad on their schedules (always on)
+//	wire poll    read sources, filter, alert, save state (one run, every 15 minutes under work)
+//	wire squad   copy the Fantasy Premier League feed into the store (one run, every 2 hours under work)
 package main
 
 import (
@@ -16,6 +17,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	_ "time/tzdata" // the runtime image has no zoneinfo
@@ -54,8 +56,13 @@ func envFloat(k string, def float64) float64 {
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: wire serve|poll|squad")
+		fmt.Fprintln(os.Stderr, "usage: wire serve|work|poll|squad|store")
 		os.Exit(2)
+	}
+	if v := os.Getenv("ENABLE_CLUBS"); v != "" {
+		if unknown := club.Enable(strings.Split(v, ",")); len(unknown) > 0 {
+			slog.Warn("ENABLE_CLUBS lists unknown clubs", "slugs", unknown)
+		}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -64,10 +71,14 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		err = serve(ctx)
+	case "work":
+		err = runWork(ctx)
 	case "poll":
 		err = runPoll(ctx)
 	case "squad":
-		err = runSquad(ctx)
+		err = runSquad(ctx, openStore())
+	case "store":
+		err = runStore(ctx, os.Args[2:])
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}
@@ -116,26 +127,8 @@ func fetchClient(st store.Store) *fetch.Client {
 	return c
 }
 
-// adoptLegacy copies the Bun app's state.json and subs.json from the bucket root to the LEGACY_CLUB club's keys, once.
-// The root files are left alone so the Bun app can be put back.
-func adoptLegacy(ctx context.Context, st store.Store) {
-	c := club.BySlug(os.Getenv("LEGACY_CLUB"))
-	if c == nil {
-		return
-	}
-	for from, to := range map[string]string{"state.json": poll.StateKey(c), "subs.json": poll.SubsKey(c)} {
-		copied, err := store.Retry(ctx, func() (bool, error) { return store.CopyIfAbsent(ctx, st, from, to, "application/json") })
-		if err != nil {
-			slog.Error("legacy copy failed", "from", from, "to", to, "err", err)
-		} else if copied {
-			slog.Info("legacy file copied", "from", from, "to", to)
-		}
-	}
-}
-
 func serve(ctx context.Context) error {
 	st := openStore()
-	adoptLegacy(ctx, st)
 	s, err := web.New(web.Config{
 		Resolver:      club.Resolver{Default: os.Getenv("DEFAULT_CLUB")},
 		CanonicalHost: os.Getenv("CANONICAL_HOST"),
@@ -171,9 +164,88 @@ func serve(ctx context.Context) error {
 	return nil
 }
 
+// Schedules for wire work.
+const (
+	pollEvery  = 15 * time.Minute
+	squadEvery = 2 * time.Hour
+)
+
 func runPoll(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Minute) // finish before the next 15-minute tick
+	defer cancel()
+	return newPoller(openStore()).Run(ctx)
+}
+
+// runWork polls and imports squads on their schedules. On start it reads the store to see what is due, so a deploy
+// that adds a club or changes a club's sources runs that club straight away, and every other club keeps its
+// schedule. Railway cron services never run on deploy, which left new clubs empty until the next tick.
+func runWork(ctx context.Context) error {
 	st := openStore()
-	adoptLegacy(ctx, st)
+	var wg sync.WaitGroup
+	wg.Go(func() { workSquad(ctx, st) })
+	workPoll(ctx, newPoller(st))
+	wg.Wait()
+	return nil
+}
+
+func workPoll(ctx context.Context, p *poll.Poller) {
+	next := p.NextRuns(ctx, club.Enabled(), pollEvery)
+	for {
+		// Clubs due within a third of the interval run now too, so clubs a deploy split up fall back into step.
+		now := time.Now()
+		var due []*club.Club
+		var slugs []string
+		wake := now.Add(pollEvery)
+		for _, c := range club.Enabled() {
+			switch at := next[c.Slug]; {
+			case at.Before(now.Add(pollEvery / 3)):
+				due, slugs = append(due, c), append(slugs, c.Slug)
+			case at.Before(wake):
+				wake = at
+			}
+		}
+		if len(due) > 0 {
+			slog.Info("poll due", "clubs", slugs)
+			p.Clubs = due
+			rctx, cancel := context.WithTimeout(ctx, 12*time.Minute)
+			if err := p.Run(rctx); err != nil {
+				slog.Error("failed", "command", "poll", "err", err)
+			}
+			cancel()
+			for _, c := range due {
+				next[c.Slug] = time.Now().Add(pollEvery)
+			}
+			continue
+		}
+		if !sleep(ctx, time.Until(wake)) {
+			return
+		}
+	}
+}
+
+func workSquad(ctx context.Context, st store.Store) {
+	next := squad.NextRun(ctx, st, squadEvery, time.Now())
+	for sleep(ctx, time.Until(next)) {
+		next = time.Now().Add(squadEvery)
+		if err := runSquad(ctx, st); err != nil {
+			slog.Error("failed", "command", "squad", "err", err)
+		}
+	}
+}
+
+// sleep waits for d and reports whether the worker should carry on.
+func sleep(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(max(d, 0))
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+func newPoller(st store.Store) *poll.Poller {
 	var sender *push.Sender
 	if v := vapid(); v != nil {
 		sender = &push.Sender{VAPID: v}
@@ -190,7 +262,7 @@ func runPoll(ctx context.Context) error {
 			seeds[slug] = u
 		}
 	}
-	p := &poll.Poller{
+	return &poll.Poller{
 		Store: st,
 		Fetch: fetchClient(st),
 		Filter: &filter.Filter{
@@ -210,13 +282,44 @@ func runPoll(ctx context.Context) error {
 		Only:          only,
 		Seeds:         seeds,
 	}
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Minute) // finish before the next 15-minute tick
-	defer cancel()
-	return p.Run(ctx)
 }
 
-func runSquad(ctx context.Context) error {
+// runStore is for maintenance, run as a one-off Railway service with the bucket variables:
+//
+//	wire store ls [prefix]   logs every key under prefix
+//	wire store rm key...     deletes the keys, for example avfc/state.json to rebuild a club's wire on the next poll
+func runStore(ctx context.Context, args []string) error {
 	st := openStore()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	switch {
+	case len(args) >= 1 && args[0] == "ls":
+		prefix := ""
+		if len(args) > 1 {
+			prefix = args[1]
+		}
+		keys, err := st.List(ctx, prefix)
+		if err != nil {
+			return err
+		}
+		for _, k := range keys {
+			slog.Info("key", "key", k)
+		}
+		slog.Info("listed", "prefix", prefix, "count", len(keys))
+		return nil
+	case len(args) >= 2 && args[0] == "rm":
+		for _, k := range args[1:] {
+			if err := st.Delete(ctx, k); err != nil {
+				return err
+			}
+			slog.Info("deleted", "key", k)
+		}
+		return nil
+	}
+	return errors.New("usage: wire store ls [prefix] | wire store rm key [key]")
+}
+
+func runSquad(ctx context.Context, st store.Store) error {
 	fc := fetchClient(st)
 	fc.UA = "wire.futbol/1.0 (+https://wire.futbol)"
 	fc.Backoff = []time.Duration{5 * time.Second}

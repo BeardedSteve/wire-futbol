@@ -2,6 +2,7 @@ package source
 
 import (
 	"os"
+	"slices"
 	"testing"
 	"time"
 )
@@ -85,6 +86,24 @@ func TestClubSiteArticle(t *testing.T) {
 	}
 }
 
+func TestClubSiteDatedLinks(t *testing.T) {
+	index := []byte(`<a href="/news/2026/october/24/report-aston-villa-2-1-man-city">x</a><a href="https://www.avfc.co.uk/news/2026/october/24/report-aston-villa-2-1-man-city">dup</a><a href="https://www.avfc.co.uk/news/2026/october/26/emery-press-conference">y</a><a href="https://example.com/news/elsewhere">no</a><a href="/news/2026/october">no</a>`)
+	got := NewsLinks(index, "https://www.avfc.co.uk")
+	want := []string{"https://www.avfc.co.uk/news/2026/october/24/report-aston-villa-2-1-man-city", "https://www.avfc.co.uk/news/2026/october/26/emery-press-conference"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("links %v", got)
+	}
+}
+
+func TestClubSiteIDLinks(t *testing.T) {
+	index := []byte(`<a href="/news/every-word-from-artetas-post-everton-press-conference-a35Bj5F4a2lz">x</a><a href="/news/Upper-Case">no</a>`)
+	got := NewsLinks(index, "https://www.arsenal.com")
+	want := []string{"https://www.arsenal.com/news/every-word-from-artetas-post-everton-press-conference-a35Bj5F4a2lz"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("links %v", got)
+	}
+}
+
 func TestParseFixtures(t *testing.T) {
 	page := []byte(`<script type="application/ld+json">{"@type":"ItemList","itemListElement":[
 {"@type":"SportsEvent","startDate":"2026-11-01T15:00:00Z","url":"https://www.liverpoolfc.com/matches/2026-27/premier-league/x","homeTeam":{"name":"Liverpool"},"awayTeam":{"name":"Aston Villa"},"location":{"name":"Anfield"}},
@@ -144,7 +163,8 @@ func TestParseDate(t *testing.T) {
 		{"Fri, 23 Oct 2026 13:15:00 UTC", "2026-10-23T13:15:00Z"},
 		{"2026-10-23T14:15:00+01:00", "2026-10-23T13:15:00Z"},
 		{"2026-10-23T13:15:00Z", "2026-10-23T13:15:00Z"},
-		{"Fri, 23 Oct 2026 14:15:00 BST", ""},
+		{"Fri, 23 Oct 2026 14:15:00 BST", "2026-10-23T13:15:00Z"},
+		{"Fri, 23 Oct 2026 14:15:00 CEST", ""},
 		{"yesterday", ""},
 	}
 	for _, c := range cases {

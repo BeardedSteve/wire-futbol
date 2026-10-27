@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -41,6 +42,7 @@ type Poller struct {
 	RetainDays    int
 	Only          []string          // source keys to read; empty means all
 	Seeds         map[string]string // club slug to a state.json URL used when the club has no state yet (staging only)
+	Clubs         []*club.Club      // clubs to poll; nil means every enabled club
 	Now           func() time.Time
 }
 
@@ -56,9 +58,12 @@ type fetched struct {
 	err  error
 }
 
-// Run polls every enabled club once. It returns an error if any club could not be saved.
+// Run polls every club once. It returns an error if any club could not be saved.
 func (p *Poller) Run(ctx context.Context) error {
-	clubs := club.Enabled()
+	clubs := p.Clubs
+	if clubs == nil {
+		clubs = club.Enabled()
+	}
 	states := map[string]*wire.State{}
 	for _, c := range clubs {
 		st, err := p.load(ctx, c)
@@ -106,6 +111,28 @@ func (p *Poller) Run(ctx context.Context) error {
 		return fmt.Errorf("clubs not saved: %s", strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// NextRuns says when each club is next due a poll: now if it has no state, its state can't be read or its sources
+// changed since its last run (a deploy that adds a club or a source), otherwise every after its last run.
+func (p *Poller) NextRuns(ctx context.Context, clubs []*club.Club, every time.Duration) map[string]time.Time {
+	now := p.now()
+	out := map[string]time.Time{}
+	for _, c := range clubs {
+		out[c.Slug] = now
+		b, err := store.Retry(ctx, func() ([]byte, error) { return p.Store.Get(ctx, StateKey(c)) })
+		if err != nil {
+			continue
+		}
+		var st struct {
+			LastRun time.Time `json:"lastRun"`
+			Config  string    `json:"config"`
+		}
+		if json.Unmarshal(b, &st) == nil && st.Config == c.Fingerprint() {
+			out[c.Slug] = st.LastRun.Add(every)
+		}
+	}
+	return out
 }
 
 func (p *Poller) wanted(key string) bool {
@@ -208,6 +235,14 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 		known[it.URL] = true
 	}
 	added := 0
+	changed := st.Config != c.Fingerprint()
+	if changed {
+		for k := range st.Health {
+			if !slices.Contains(c.Sources, k) {
+				delete(st.Health, k)
+			}
+		}
+	}
 
 	// 1. ingest
 	for _, s := range c.SourceList() {
@@ -245,8 +280,8 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 		}
 	}
 
-	// 1b. fixtures every 3 hours; a failure keeps the previous list
-	if c.FixturesURL != "" && (st.Fixtures == nil || now.Sub(st.Fixtures.FetchedAt) > 3*time.Hour) {
+	// 1b. fixtures every 3 hours, or straight away when the club's config changed; a failure keeps the previous list
+	if c.FixturesURL != "" && (changed || st.Fixtures == nil || now.Sub(st.Fixtures.FetchedAt) > 3*time.Hour) {
 		if b, err := p.Fetch.Get(ctx, c.FixturesURL, fetch.AcceptFeed, 30*time.Second); err != nil {
 			log.Error("fixtures failed", "err", err)
 		} else if evs := source.ParseFixtures(b, now); len(evs) > 0 {
@@ -254,7 +289,8 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 		}
 	}
 
-	// 2. classify pending, newest first, batches of 20, at most 3 batches a run
+	// 2. classify pending, newest first, batches of 10, at most 6 batches a run. Gemini rejects 20-item batches
+	// with 400 INVALID_ARGUMENT, seen on a new club's first poll.
 	var pending, recent []*wire.Item
 	for _, it := range st.Items {
 		switch {
@@ -269,8 +305,8 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 	}
 	newestFirst(pending)
 	newestFirst(recent)
-	for i := 0; i < min(len(pending), 60); i += 20 {
-		if !p.Filter.Classify(ctx, c, pending[i:min(i+20, len(pending))], &recent, st) {
+	for i := 0; i < min(len(pending), 60); i += 10 {
+		if !p.Filter.Classify(ctx, c, pending[i:min(i+10, len(pending))], &recent, st) {
 			break
 		}
 	}
@@ -280,7 +316,7 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 
 	// 4. retain and save
 	st.Retain(now, p.RetainDays)
-	st.LastRun = now
+	st.LastRun, st.Config = now, c.Fingerprint()
 	b, err := json.Marshal(st)
 	if err != nil {
 		return err

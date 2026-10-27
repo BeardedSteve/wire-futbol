@@ -85,28 +85,6 @@ func TestDirRejectsEscapes(t *testing.T) {
 	}
 }
 
-func TestCopyIfAbsent(t *testing.T) {
-	ctx := context.Background()
-	s := Dir(t.TempDir())
-	if ok, err := CopyIfAbsent(ctx, s, "state.json", "lfc/state.json", "application/json"); ok || err != nil {
-		t.Fatalf("missing source: %v %v", ok, err)
-	}
-	s.Put(ctx, "state.json", []byte("old"), "application/json")
-	if ok, err := CopyIfAbsent(ctx, s, "state.json", "lfc/state.json", "application/json"); !ok || err != nil {
-		t.Fatalf("copy: %v %v", ok, err)
-	}
-	s.Put(ctx, "state.json", []byte("newer"), "application/json")
-	if ok, _ := CopyIfAbsent(ctx, s, "state.json", "lfc/state.json", "application/json"); ok {
-		t.Fatal("overwrote an existing copy")
-	}
-	if b, _ := s.Get(ctx, "lfc/state.json"); string(b) != "old" {
-		t.Fatalf("lfc/state.json = %q", b)
-	}
-	if b, _ := s.Get(ctx, "state.json"); string(b) != "newer" {
-		t.Fatal("source changed")
-	}
-}
-
 func TestRetry(t *testing.T) {
 	defer func(w []time.Duration) { retryWaits = w }(retryWaits)
 	retryWaits = []time.Duration{0, 0, 0, 0}
@@ -129,5 +107,53 @@ func TestRetry(t *testing.T) {
 	calls = 0
 	if _, err := Retry(ctx, func() (string, error) { calls++; return "", errors.New("down") }); err == nil || calls != 5 {
 		t.Fatalf("persistent failure: %v after %d calls", err, calls)
+	}
+}
+
+func TestS3DeleteAndList(t *testing.T) {
+	objects := map[string]bool{"/b/avfc/state.json": true, "/b/afc/state.json": true, "/b/lfc/state.json": true}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "DELETE":
+			delete(objects, r.URL.Path)
+			w.WriteHeader(204)
+		case r.Method == "GET" && r.URL.Path == "/b" && r.URL.Query().Get("list-type") == "2":
+			// two pages, to follow the continuation token
+			if r.URL.Query().Get("continuation-token") == "" {
+				io.WriteString(w, `<ListBucketResult><Contents><Key>afc/state.json</Key></Contents><IsTruncated>true</IsTruncated><NextContinuationToken>t1</NextContinuationToken></ListBucketResult>`)
+				return
+			}
+			io.WriteString(w, `<ListBucketResult><Contents><Key>avfc/state.json</Key></Contents><IsTruncated>false</IsTruncated></ListBucketResult>`)
+		default:
+			w.WriteHeader(400)
+		}
+	}))
+	defer srv.Close()
+	s := &S3{Endpoint: srv.URL, Bucket: "b", Region: "auto", AccessKey: "key", SecretKey: "secret"}
+	ctx := context.Background()
+	keys, err := s.List(ctx, "a")
+	if err != nil || strings.Join(keys, ",") != "afc/state.json,avfc/state.json" {
+		t.Fatalf("list = %v, %v", keys, err)
+	}
+	if err := s.Delete(ctx, "avfc/state.json"); err != nil || objects["/b/avfc/state.json"] || !objects["/b/lfc/state.json"] {
+		t.Fatalf("delete: %v, %v", err, objects)
+	}
+}
+
+func TestDirDeleteAndList(t *testing.T) {
+	d := Dir(t.TempDir())
+	ctx := context.Background()
+	for _, k := range []string{"avfc/state.json", "afc/state.json", "lfc/state.json"} {
+		d.Put(ctx, k, []byte("{}"), "")
+	}
+	if err := d.Delete(ctx, "avfc/state.json"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Delete(ctx, "avfc/state.json"); err != nil {
+		t.Fatalf("deleting a missing key: %v", err)
+	}
+	keys, err := d.List(ctx, "a")
+	if err != nil || strings.Join(keys, ",") != "afc/state.json" {
+		t.Fatalf("list = %v, %v", keys, err)
 	}
 }

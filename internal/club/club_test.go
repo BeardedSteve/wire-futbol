@@ -64,3 +64,47 @@ func TestConfigIsConsistent(t *testing.T) {
 		}
 	}
 }
+
+func TestEnable(t *testing.T) {
+	saved := Clubs
+	t.Cleanup(func() { Clubs = saved })
+	Clubs = append([]Club{}, saved...)
+	if unknown := Enable([]string{" avfc", "nope"}); len(unknown) != 1 || unknown[0] != "nope" {
+		t.Fatalf("unknown %v", unknown)
+	}
+	if BySlug("avfc") == nil || BySlug("afc") != nil {
+		t.Fatal("Enable switched on the wrong clubs")
+	}
+	if saved[1].Enabled {
+		t.Fatal("Enable changed the saved config")
+	}
+}
+
+func TestPickable(t *testing.T) {
+	for host, want := range map[string]bool{"web-go-staging.up.railway.app": true, "localhost:3000": true, "lfc.wire.futbol": false, "wire.futbol.": false} {
+		if got := Pickable(host); got != want {
+			t.Errorf("Pickable(%q) = %v", host, got)
+		}
+	}
+}
+
+func TestFingerprint(t *testing.T) {
+	saved := Sources
+	t.Cleanup(func() { Sources = saved })
+	Sources = map[string]Source{"a": {Key: "a", URL: "https://a/"}, "b": {Key: "b", URL: "https://b/"}}
+	c := Club{Sources: []string{"a"}, Prompt: Prompt{Manager: "X"}}
+	fp := c.Fingerprint()
+	c.Prompt.Manager = "Y"
+	if c.Fingerprint() != fp {
+		t.Fatal("prompt changes should not need a poll")
+	}
+	c.Sources = []string{"a", "b"}
+	added := c.Fingerprint()
+	if added == fp {
+		t.Fatal("added source not seen")
+	}
+	Sources["b"] = Source{Key: "b", URL: "https://b2/"}
+	if c.Fingerprint() == added {
+		t.Fatal("moved source not seen")
+	}
+}

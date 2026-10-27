@@ -19,22 +19,22 @@ import (
 
 func lfc() *club.Club { return club.BySlug("lfc") }
 
-// The Liverpool prompt and schema must match the Bun app's word for word, so the filter behaves the same.
-func TestPromptMatchesBunApp(t *testing.T) {
+// The Liverpool prompt and schema must match the golden files word for word.
+func TestPromptMatchesGolden(t *testing.T) {
 	want, _ := os.ReadFile("testdata/prompt-lfc.txt")
 	if got := SystemPrompt(lfc()); got != string(want) {
-		t.Fatalf("prompt differs from the Bun app:\n%s", got)
+		t.Fatalf("prompt differs from the golden file:\n%s", got)
 	}
 }
 
-func TestSchemaMatchesBunApp(t *testing.T) {
+func TestSchemaMatchesGolden(t *testing.T) {
 	b, _ := os.ReadFile("testdata/schema-lfc.json")
 	var want, got any
 	json.Unmarshal(b, &want)
 	g, _ := json.Marshal(schema([]string{"aaa", "bbb"}, []string{"xxx", "aaa", "bbb"}, lfc().Short))
 	json.Unmarshal(g, &got)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("schema differs from the Bun app:\n%s", g)
+		t.Fatalf("schema differs from the golden file:\n%s", g)
 	}
 }
 
@@ -139,5 +139,78 @@ func TestClassifyRecordsModelError(t *testing.T) {
 	}
 	if !strings.Contains(st.ModelError, "HTTP 403 API key not valid") || it.Status != wire.Pending {
 		t.Fatalf("model error %q, item %s", st.ModelError, it.Status)
+	}
+}
+
+// fakeGemini keeps every item it is sent, unless reject says the request is bad.
+func fakeGemini(calls *atomic.Int32, reject func(ids []string) bool) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		var req map[string]any
+		b, _ := io.ReadAll(r.Body)
+		json.Unmarshal(b, &req)
+		user := req["contents"].([]any)[0].(map[string]any)["parts"].([]any)[0].(map[string]any)["text"].(string)
+		var ids []string
+		for _, line := range strings.Split(user, "\n") {
+			if id, ok := strings.CutPrefix(line, "id: "); ok {
+				ids = append(ids, id)
+			}
+		}
+		if reject(ids) {
+			w.WriteHeader(400)
+			io.WriteString(w, `{"error":{"code":400,"status":"INVALID_ARGUMENT"}}`)
+			return
+		}
+		var res []result
+		for _, id := range ids {
+			res = append(res, result{ID: id, Status: "kept", Category: "other", Summary: "S.", DropKind: "none", Cluster: "new"})
+		}
+		out, _ := json.Marshal(map[string]any{"results": res})
+		json.NewEncoder(w).Encode(map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{map[string]any{"text": string(out)}}}}}})
+	}))
+}
+
+func TestClassifySplitsRejectedBatch(t *testing.T) {
+	var calls atomic.Int32
+	srv := fakeGemini(&calls, func(ids []string) bool { return len(ids) > 2 })
+	defer srv.Close()
+	f := &Filter{APIKey: "k", Model: "m", BaseURL: srv.URL, DailyCap: 1 << 20, Sleep: func(time.Duration) {}}
+	st := (&wire.State{}).Init()
+	batch := []*wire.Item{item("a"), item("b"), item("c"), item("d"), item("e")}
+	var recent []*wire.Item
+	if !f.Classify(context.Background(), lfc(), batch, &recent, st) {
+		t.Fatalf("classify failed: %s", st.ModelError)
+	}
+	for _, it := range batch {
+		if it.Status != wire.Kept {
+			t.Errorf("%s left %s", it.ID, it.Status)
+		}
+	}
+	if st.ModelError != "" {
+		t.Errorf("model error kept: %q", st.ModelError)
+	}
+	// 5 rejected, 2 kept, 3 rejected, 1 kept, 2 kept
+	if calls.Load() != 5 {
+		t.Errorf("calls %d", calls.Load())
+	}
+}
+
+func TestClassifyStopsSplittingWhenEverythingIsRejected(t *testing.T) {
+	var calls atomic.Int32
+	srv := fakeGemini(&calls, func([]string) bool { return true })
+	defer srv.Close()
+	f := &Filter{APIKey: "k", Model: "m", BaseURL: srv.URL, DailyCap: 1 << 20, Sleep: func(time.Duration) {}}
+	st := (&wire.State{}).Init()
+	var batch []*wire.Item
+	for _, id := range strings.Split("abcdefgh", "") {
+		batch = append(batch, item(id))
+	}
+	var recent []*wire.Item
+	if f.Classify(context.Background(), lfc(), batch, &recent, st) {
+		t.Fatal("should fail")
+	}
+	// 8, then the first 4, 2 and 1
+	if calls.Load() != 4 || batch[0].Status != wire.Pending || !strings.Contains(st.ModelError, "HTTP 400") {
+		t.Fatalf("calls %d, status %s, error %q", calls.Load(), batch[0].Status, st.ModelError)
 	}
 }

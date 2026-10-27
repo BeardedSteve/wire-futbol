@@ -1,5 +1,5 @@
 // Package wire holds one club's wire state (the items each run has read and the filter's verdicts) and turns it
-// into stories. The JSON matches the Bun app's state.json so either can read the other's file.
+// into stories.
 package wire
 
 import (
@@ -79,6 +79,7 @@ type State struct {
 	Usage      map[string]*Usage  `json:"usage"`
 	Pushes     map[string]int     `json:"pushes"`
 	LastRun    time.Time          `json:"lastRun,omitzero"`
+	Config     string             `json:"config,omitempty"` // the club's Fingerprint at the last run
 	ModelError string             `json:"modelError,omitempty"`
 	Fixtures   *Fixtures          `json:"fixtures,omitempty"`
 }

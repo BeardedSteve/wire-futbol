@@ -58,10 +58,13 @@ var dateLayouts = []string{
 
 // ParseDate reads the date formats feeds use. ok is false when none fit.
 //
-// A zone abbreviation Go doesn't know, such as BST, parses with a zero offset and would put the time an hour out, so
-// it counts as unparseable. The caller then uses the fetch time, as the Bun app did.
+// A zone abbreviation Go doesn't know parses with a zero offset and would put the time an hour out, so it counts as
+// unparseable and the caller uses the fetch time. BST, which Sky Sports uses all summer, is read as +0100.
 func ParseDate(s string) (time.Time, bool) {
 	s = strings.TrimSpace(s)
+	if t, ok := strings.CutSuffix(s, " BST"); ok {
+		s = t + " +0100"
+	}
 	for _, l := range dateLayouts {
 		if t, err := time.Parse(l, s); err == nil {
 			if name, off := t.Zone(); off == 0 && name != "" && name != "UTC" && name != "GMT" && name != "UT" && name != "Z" {
