@@ -444,6 +444,9 @@ func TestPickClubOffWireFutbol(t *testing.T) {
 	saved := club.Clubs
 	t.Cleanup(func() { club.Clubs = saved })
 	club.Clubs = append([]club.Club{}, saved...)
+	for i := range club.Clubs {
+		club.Clubs[i].Enabled = club.Clubs[i].Slug == "lfc"
+	}
 	club.Enable([]string{"avfc"})
 	s, _ := testServer(t, false)
 	h := s.Handler()

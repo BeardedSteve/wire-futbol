@@ -1,6 +1,6 @@
 # wire-futbol
 
-Club news wires for wire.futbol. Each club's wire reads tier 1 sources, keeps the news, drops opinion, rumour and clickbait, and shows the rest in one place. Liverpool runs at lfc.wire.futbol.
+Club news wires for wire.futbol. Each club's wire reads tier 1 sources, keeps the news, drops opinion, rumour and clickbait, and shows the rest in one place. Each club runs at `<slug>.wire.futbol`: lfc, avfc and afc.
 
 ## How it fits together
 
@@ -88,7 +88,7 @@ A source listed by several clubs is fetched once and its items go to each club's
 1. Add a `Club` to `Clubs` in `internal/club/clubs.go`: slug, names, mark, host (`<slug>.wire.futbol`), sources, fixtures page, FPL team short name (for example `ARS`), Shorts channels, colours and prompt details. Leave `Enabled: false`.
 2. Run `go test ./...`.
 3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services. The poller restarts and polls the new club straight away. Then open `https://web-go-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
-4. Turn on `Enabled`, deploy, and add the custom domain to the web service on Railway.
+4. Turn on `Enabled`, deploy, add `<slug>.wire.futbol` as a custom domain on the production `wire-web` service, and add the CNAME and `_railway-verify` TXT records Railway gives you to the wire.futbol zone at Namecheap.
 
 ## Bucket maintenance
 

@@ -69,14 +69,21 @@ func TestEnable(t *testing.T) {
 	saved := Clubs
 	t.Cleanup(func() { Clubs = saved })
 	Clubs = append([]Club{}, saved...)
+	was := make([]bool, len(saved))
+	for i := range Clubs {
+		was[i] = saved[i].Enabled
+		Clubs[i].Enabled = Clubs[i].Slug == "lfc"
+	}
 	if unknown := Enable([]string{" avfc", "nope"}); len(unknown) != 1 || unknown[0] != "nope" {
 		t.Fatalf("unknown %v", unknown)
 	}
 	if BySlug("avfc") == nil || BySlug("afc") != nil {
 		t.Fatal("Enable switched on the wrong clubs")
 	}
-	if saved[1].Enabled {
-		t.Fatal("Enable changed the saved config")
+	for i := range saved {
+		if saved[i].Enabled != was[i] {
+			t.Fatal("Enable changed the saved config")
+		}
 	}
 }
 
