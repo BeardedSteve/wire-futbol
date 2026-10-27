@@ -19,22 +19,22 @@ import (
 
 func lfc() *club.Club { return club.BySlug("lfc") }
 
-// The Liverpool prompt and schema must match the Bun app's word for word, so the filter behaves the same.
-func TestPromptMatchesBunApp(t *testing.T) {
+// The Liverpool prompt and schema must match the golden files word for word.
+func TestPromptMatchesGolden(t *testing.T) {
 	want, _ := os.ReadFile("testdata/prompt-lfc.txt")
 	if got := SystemPrompt(lfc()); got != string(want) {
-		t.Fatalf("prompt differs from the Bun app:\n%s", got)
+		t.Fatalf("prompt differs from the golden file:\n%s", got)
 	}
 }
 
-func TestSchemaMatchesBunApp(t *testing.T) {
+func TestSchemaMatchesGolden(t *testing.T) {
 	b, _ := os.ReadFile("testdata/schema-lfc.json")
 	var want, got any
 	json.Unmarshal(b, &want)
 	g, _ := json.Marshal(schema([]string{"aaa", "bbb"}, []string{"xxx", "aaa", "bbb"}, lfc().Short))
 	json.Unmarshal(g, &got)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("schema differs from the Bun app:\n%s", g)
+		t.Fatalf("schema differs from the golden file:\n%s", g)
 	}
 }
 

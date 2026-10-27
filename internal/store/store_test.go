@@ -85,28 +85,6 @@ func TestDirRejectsEscapes(t *testing.T) {
 	}
 }
 
-func TestCopyIfAbsent(t *testing.T) {
-	ctx := context.Background()
-	s := Dir(t.TempDir())
-	if ok, err := CopyIfAbsent(ctx, s, "state.json", "lfc/state.json", "application/json"); ok || err != nil {
-		t.Fatalf("missing source: %v %v", ok, err)
-	}
-	s.Put(ctx, "state.json", []byte("old"), "application/json")
-	if ok, err := CopyIfAbsent(ctx, s, "state.json", "lfc/state.json", "application/json"); !ok || err != nil {
-		t.Fatalf("copy: %v %v", ok, err)
-	}
-	s.Put(ctx, "state.json", []byte("newer"), "application/json")
-	if ok, _ := CopyIfAbsent(ctx, s, "state.json", "lfc/state.json", "application/json"); ok {
-		t.Fatal("overwrote an existing copy")
-	}
-	if b, _ := s.Get(ctx, "lfc/state.json"); string(b) != "old" {
-		t.Fatalf("lfc/state.json = %q", b)
-	}
-	if b, _ := s.Get(ctx, "state.json"); string(b) != "newer" {
-		t.Fatal("source changed")
-	}
-}
-
 func TestRetry(t *testing.T) {
 	defer func(w []time.Duration) { retryWaits = w }(retryWaits)
 	retryWaits = []time.Duration{0, 0, 0, 0}

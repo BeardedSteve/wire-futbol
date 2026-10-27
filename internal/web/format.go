@@ -11,7 +11,7 @@ import (
 	"github.com/BeardedSteve/wire-futbol/internal/wire"
 )
 
-// Times are shown in London. These mirror the en-GB formats the Bun app used.
+// Times are shown in London, in en-GB formats.
 
 func lon(t time.Time) time.Time { return t.In(wire.London) }
 
