@@ -81,6 +81,26 @@ A source listed by several clubs is fetched once and its items go to each club's
 3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services, then open `https://web-go-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
 4. Turn on `Enabled`, deploy, and add the custom domain to the web service on Railway.
 
+## Bucket maintenance
+
+The bucket keys only exist in each Railway project's shared variables, so objects are listed and deleted from a
+one-off service that runs `wire store`:
+
+```sh
+wire store ls [prefix]      # logs every key under prefix
+wire store rm key...        # deletes keys; a missing key is fine
+```
+
+To run it, for example to rebuild a club's wire after a parser fix by deleting `<club>/state.json`:
+
+1. Create an empty service named `store-admin` in the project and environment.
+2. Give it variables that reference the shared ones: `S3_BUCKET=${{shared.S3_BUCKET}}`, and the same for `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION`, `S3_VIRTUAL_HOSTED` and `RAILWAY_DOCKERFILE_PATH`.
+3. Set its start command to `/wire store ls` (or `/wire store rm ...`) and its restart policy to never.
+4. Connect it to this repo on a branch that has `wire store`. It builds, runs once and exits. Read the result in its deploy logs.
+5. Delete the service.
+
+Run `ls` first and check the keys before `rm`. Locally, `wire store` uses `./data` unless `S3_*` variables are set, so unset any that point at another bucket.
+
 ## Branches and environments
 
 | Branch | Railway environment | Runs |
