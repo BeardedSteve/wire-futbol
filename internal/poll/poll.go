@@ -254,7 +254,8 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 		}
 	}
 
-	// 2. classify pending, newest first, batches of 20, at most 3 batches a run
+	// 2. classify pending, newest first, batches of 10, at most 6 batches a run. Gemini rejects 20-item batches
+	// with 400 INVALID_ARGUMENT, seen on a new club's first poll.
 	var pending, recent []*wire.Item
 	for _, it := range st.Items {
 		switch {
@@ -269,8 +270,8 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 	}
 	newestFirst(pending)
 	newestFirst(recent)
-	for i := 0; i < min(len(pending), 60); i += 20 {
-		if !p.Filter.Classify(ctx, c, pending[i:min(i+20, len(pending))], &recent, st) {
+	for i := 0; i < min(len(pending), 60); i += 10 {
+		if !p.Filter.Classify(ctx, c, pending[i:min(i+10, len(pending))], &recent, st) {
 			break
 		}
 	}
