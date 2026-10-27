@@ -316,7 +316,7 @@ func runStore(ctx context.Context, args []string) error {
 		}
 		return nil
 	}
-	return errors.New("usage: wire store ls [prefix] | wire store rm key...")
+	return errors.New("usage: wire store ls [prefix] | wire store rm key [key]")
 }
 
 func runSquad(ctx context.Context, st store.Store) error {
