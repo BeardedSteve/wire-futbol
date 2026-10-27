@@ -107,7 +107,6 @@ func New(cfg Config, st store.Store, vapid *push.VAPID, fc *fetch.Client) (*Serv
 			return a.path
 		},
 		"icon":      func(name string) template.HTML { return icon[name] },
-		"list":      func(v ...string) []string { return v },
 		"upper":     strings.ToUpper,
 		"orDefault": orDefault,
 		"pulseOf":   func(v *wireView) pulseView { return pulseView{Run: v.Run, N: v.N} },
@@ -602,11 +601,11 @@ func (s *Server) manifest(w http.ResponseWriter, r *http.Request) {
 // paper is the page colour in wire.css, for the installed app's splash screen and title bar.
 const paper = "#efeadf"
 
-// clubCSS sets the club colour. Text on it is white or ink, whichever reads better.
+// clubCSS sets the club colour for each theme. Text on it is white or ink, whichever reads better.
 func clubCSS(c *club.Club) []byte {
 	k := c.Colours
-	return fmt.Appendf(nil, ":root{--club:%s;--club-ink:%s;--club-text:%s}\n@media (prefers-color-scheme:dark){:root{--club-text:%s}}\n",
-		k.Accent, onColour(k.Accent), k.AccentText, k.AccentTextDark)
+	return fmt.Appendf(nil, ":root{--club:%s;--club-ink:%s;--club-text:%s}\n@media (prefers-color-scheme:dark){:root{--club:%s;--club-ink:%s;--club-text:%s}}\n",
+		k.Accent, onColour(k.Accent), k.AccentText, k.AccentDark, onColour(k.AccentDark), k.AccentTextDark)
 }
 
 func (s *Server) clubCSSPath(c *club.Club) string {

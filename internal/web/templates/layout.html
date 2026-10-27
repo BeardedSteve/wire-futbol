@@ -40,7 +40,7 @@
 <dialog class="sheet" id="alerts-sheet" aria-labelledby="sheet-h"><p class="sheet-h" id="sheet-h">Phone alerts</p><div id="sheet-body"></div></dialog>
 </body></html>{{end}}
 
-{{define "empty"}}<div class="empty"><p>{{index . 0}}</p><p>{{index . 1}}</p></div>{{end}}
+{{define "empty"}}<div class="empty"><p>{{.}}</p></div>{{end}}
 
 {{define "sec"}}<h2 class="sec"><span>{{index . 0}}</span>{{if gt (len .) 1}}<small>{{index . 1}}</small>{{end}}</h2>{{end}}
 

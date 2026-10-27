@@ -62,6 +62,12 @@ func TestConfigIsConsistent(t *testing.T) {
 		if c.FPLTeam == "" || c.FixtureName == "" || c.Mark == "" {
 			t.Errorf("%s: missing FPL team, fixture name or mark", c.Slug)
 		}
+		if k := c.Colours; k.Accent == "" || k.AccentText == "" || k.AccentDark == "" || k.AccentTextDark == "" {
+			t.Errorf("%s: every club needs its colour and text colour for both themes", c.Slug)
+		}
+		if c.Sources[0] != c.Official {
+			t.Errorf("%s: the club's own site is read first", c.Slug)
+		}
 	}
 }
 

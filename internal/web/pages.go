@@ -158,12 +158,12 @@ func shortName(name string) string {
 }
 
 type fixtureView struct {
-	URL, Day, HM, Opp, Competition, Venue, Start string
-	Home                                         bool
+	URL, Day, HM, Opp, Competition, Start string
+	Home                                  bool
 }
 
 func fixture(c *club.Club, e fixtureLike) fixtureView {
-	v := fixtureView{URL: safeURL(e.url), Day: shortDay(e.start), HM: hm(e.start), Competition: e.competition, Venue: e.venue, Start: iso(e.start),
+	v := fixtureView{URL: safeURL(e.url), Day: shortDay(e.start), HM: hm(e.start), Competition: e.competition, Start: iso(e.start),
 		Home: strings.EqualFold(e.home, c.FixtureName)}
 	v.Opp = e.away
 	if !v.Home {
@@ -173,20 +173,77 @@ func fixture(c *club.Club, e fixtureLike) fixtureView {
 }
 
 type fixtureLike struct {
-	start                               time.Time
-	home, away, url, competition, venue string
+	start                        time.Time
+	home, away, url, competition string
 }
 
-// upcoming is the club's next matches, including one that kicked off in the last two hours.
-func upcoming(c *club.Club, st *wire.State, now time.Time, n int) []fixtureView {
-	var out []fixtureView
-	if st == nil || st.Fixtures == nil {
-		return out
-	}
-	for _, e := range st.Fixtures.Events {
-		if e.Start.After(now.Add(-liveFor)) && len(out) < n {
-			out = append(out, fixture(c, fixtureLike{e.Start, e.Home, e.Away, e.URL, e.Competition, e.Venue}))
+// upcoming is the club's next matches, including one that kicked off in the last two hours. FPL is the record of
+// every club's league matches, so names and kick-offs read the same for every club. A club's fixtures page, where
+// it has one, adds its cup ties and the match page link for a league match.
+func upcoming(c *club.Club, st *wire.State, sq *squad.Data, now time.Time, n int) []fixtureView {
+	var page []fixtureLike
+	if st != nil && st.Fixtures != nil {
+		for _, e := range st.Fixtures.Events {
+			page = append(page, fixtureLike{e.Start, e.Home, e.Away, e.URL, e.Competition})
 		}
+	}
+	same := func(a, b time.Time) bool { d := a.Sub(b); return d > -3*time.Hour && d < 3*time.Hour }
+	all := leagueFixtures(c, sq)
+	for i := range all {
+		for _, e := range page {
+			if same(e.start, all[i].start) {
+				all[i].url = e.url
+			}
+		}
+	}
+	for _, e := range page {
+		league := false
+		for _, f := range all {
+			league = league || same(e.start, f.start)
+		}
+		if !league {
+			all = append(all, e)
+		}
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].start.Before(all[j].start) })
+	var out []fixtureView
+	for _, f := range all {
+		if f.start.After(now.Add(-liveFor)) && len(out) < n {
+			out = append(out, fixture(c, f))
+		}
+	}
+	return out
+}
+
+// leagueFixtures are the club's Premier League matches from FPL, linked to the club's own site until its fixtures
+// page gives the match's own page.
+func leagueFixtures(c *club.Club, sq *squad.Data) []fixtureLike {
+	if sq == nil {
+		return nil
+	}
+	var us int
+	names := map[int]string{}
+	for _, t := range sq.Teams {
+		names[t.ID] = t.Name
+		if t.ShortName == c.FPLTeam {
+			us = t.ID
+		}
+	}
+	if us == 0 {
+		return nil
+	}
+	var out []fixtureLike
+	for _, f := range sq.Fixtures {
+		if f.TeamH != us && f.TeamA != us {
+			continue
+		}
+		home, away := names[f.TeamH], names[f.TeamA]
+		if f.TeamH == us {
+			home = c.FixtureName
+		} else {
+			away = c.FixtureName
+		}
+		out = append(out, fixtureLike{f.Kickoff, home, away, club.Sources[c.Official].SiteBase, "Premier League"})
 	}
 	return out
 }
@@ -317,18 +374,14 @@ func standing(sq *squad.Data, m *squad.Model) *standingView {
 type tableView struct {
 	Fixtures []fixtureView
 	Standing *standingView
-	Why      string
 }
 
 func (s *Server) tablePage(c *club.Club, st *wire.State, sq *squad.Data, now time.Time) *page {
 	p := s.basePage(c, st, now, "Table · "+c.App(), "table")
 	p.H1, p.Em = "Fixtures and", "table"
-	v := &tableView{Fixtures: upcoming(c, st, now, 8)}
+	v := &tableView{Fixtures: upcoming(c, st, sq, now, 8)}
 	if sq != nil {
 		v.Standing = standing(sq, sq.Model(c.FPLTeam, now))
-	}
-	if v.Standing == nil {
-		v.Why = "No table yet."
 	}
 	p.Data = v
 	return p
@@ -344,8 +397,12 @@ type sourceRow struct {
 
 func sourceRows(c *club.Club, st *wire.State, now time.Time) []sourceRow {
 	var out []sourceRow
+	var health map[string]*wire.Health
+	if st != nil {
+		health = st.Health
+	}
 	for _, src := range c.SourceList() {
-		h := st.Health[src.Key]
+		h := health[src.Key]
 		r := sourceRow{Name: src.Name}
 		r.OK = h != nil && h.Fails == 0 && !h.LastOK.IsZero()
 		switch {
@@ -419,8 +476,13 @@ func (s *Server) statusPage(c *club.Club, st *wire.State, sq *squad.Data, now ti
 	default:
 		v.Headline = "Everything is working"
 	}
-	if st.Fixtures != nil {
-		v.Fixtures = timeTag(st.Fixtures.FetchedAt, now)
+	switch {
+	case c.FixturesURL == "":
+		v.Fixtures = "League only, from squad data"
+	case st.Fixtures != nil:
+		v.Fixtures = "Refreshed " + timeTag(st.Fixtures.FetchedAt, now)
+	default:
+		v.Fixtures = "Not loaded yet"
 	}
 	today := wire.Day(now)
 	v.Pushes = st.Pushes[today]

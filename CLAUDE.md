@@ -13,6 +13,14 @@ The wire is for fans checking in on their phone. Every word on a page has to ear
 - Accessible names (`aria-label`, `sr-only`) may say more than the visible text. That is not page copy.
 - Before adding a sentence to a template, try deleting it. Keep it only if a fan would be confused without it.
 
+## Every club looks the same
+
+Every club's pages show the same panels and sections in the same places. Only the club's name, colour and data differ.
+
+- A section with no data keeps its heading and shows one short line (`No fixtures yet.`). Never drop a section or panel for one club.
+- Anything shown must come from a source every club has. FPL is the record for league fixtures, the table and the squad. A club's own fixtures page only adds cup ties and match links.
+- `TestEveryClubSharesOneLayout` compares every enabled club's pages. Keep it passing when you add a club or a section.
+
 ## Hosting: the one ideal state
 
 Keep Railway and DNS exactly like this. If what you find differs, fix it back to this; never work around it.

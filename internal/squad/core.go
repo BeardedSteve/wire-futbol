@@ -224,9 +224,10 @@ func Percentile(sorted []float64, v float64) float64 {
 	return 100 * (float64(lo) + 0.5*float64(eq-lo)) / float64(len(sorted))
 }
 
-var leftRe = regexp.MustCompile(`(?i)\bjoined\b|\bloan\b|\bleft the club\b|\bpermanent`)
+var leftRe = regexp.MustCompile(`(?i)\bjoined\b|\bloan\b|\bleft the club\b|\bpermanent|\bdeparted\b|\breturned to\b`)
 
-// HasLeft is true for players sold or loaned out: FPL marks them "u" with a "Has joined ..." note.
+// HasLeft is true for players sold, released, loaned out or back at their parent club: FPL marks them "u" with a
+// "Has joined ...", "has departed ..." or "has returned to ..." note.
 func HasLeft(p *Player) bool { return p.Removed || (p.Status == "u" && leftRe.MatchString(p.News)) }
 
 var injuryRe = regexp.MustCompile(`(?i)injury|knock|illness|ill\b|fitness|surgery|strain|tear|fracture|concussion`)

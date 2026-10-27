@@ -1,4 +1,4 @@
-{{define "main"}}{{with .Data}}{{if not .M}}{{template "empty" (list "Squad data isn't loaded yet" .Why)}}{{else}}
+{{define "main"}}{{with .Data}}{{if not .M}}{{template "empty" "No squad data yet."}}{{else}}
 <p class="scale" aria-hidden="true"><span>Bottom</span><span class="sw">{{range .Steps}}<i class="q{{.}}"></i>{{end}}</span><span>Top</span></p>
 {{range .Positions}}<section class="pos-sec" id="pos-{{.Pos}}" aria-labelledby="pos-{{.Pos}}-h"><h2 class="sec" id="pos-{{.Pos}}-h"><span>{{.Many}}</span><small>{{.PoolN}} in league · per 90</small></h2>
 <div class="pt-row pt-head" aria-hidden="true"><span></span><span></span>{{range .Heads}}<span title="{{.Title}}"><span class="full">{{.Full}}</span><span class="short">{{.Short}}</span></span>{{end}}</div>

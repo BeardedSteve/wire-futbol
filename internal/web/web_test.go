@@ -93,7 +93,7 @@ func TestPagesRenderWithoutInlineCode(t *testing.T) {
 	s, _ := testServer(t, true)
 	h := s.Handler()
 	pages := map[string][]string{
-		"/":       {`class="story`, "NEXT UP", "Brighton &amp; Hove Albion", "Treatment room", "Standing", "Confirmed", "Unconfirmed", `aria-current="true"><b>100</b>All`},
+		"/":       {`class="story`, "NEXT UP", "BRIGHTON", "liverpool-v-brighton-and-hove-albion-english-premier-league-20261025", "Treatment room", "Standing", "Confirmed", "Unconfirmed", `aria-current="true"><b>100</b>All`},
 		"/spiked": {"Why spiked", "Any reason", `name="bucket" value="promo"`},
 		"/status": {"Schedule and alerts", "liverpoolfc.com", "Refreshed", "gemini-3.8-flash"},
 		"/squad":  {`class="si si-inj"`, `class="si si-doubt"`, `<div class="med">`, `id="p-`, "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai", `hx-get="/squad/player/`},
@@ -274,7 +274,7 @@ func TestSquadMissingSaysSoAndWireStillWorks(t *testing.T) {
 	if r := get(t, h, "lfc.wire.futbol", "/"); r.StatusCode != 200 {
 		t.Fatal(r.StatusCode)
 	}
-	if html := body(get(t, h, "lfc.wire.futbol", "/squad")); !strings.Contains(html, "Squad data isn&#39;t loaded yet") {
+	if html := body(get(t, h, "lfc.wire.futbol", "/squad")); !strings.Contains(html, "No squad data yet.") {
 		t.Fatal("squad page should say data isn't loaded")
 	}
 	if html := body(get(t, h, "lfc.wire.futbol", "/status")); !strings.Contains(html, "Not loaded yet") {
@@ -293,8 +293,11 @@ func TestEmptyStoreRenders(t *testing.T) {
 			t.Errorf("%s: %d", p, r.StatusCode)
 		}
 	}
-	if !strings.Contains(body(get(t, h, "localhost", "/")), "Starting up") {
-		t.Error("empty wire should say it is starting up")
+	html := body(get(t, h, "localhost", "/"))
+	for _, want := range []string{"No run yet.", "No fixtures yet.", "No table yet.", "No squad data yet.", "never read"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("empty wire: missing %q", want)
+		}
 	}
 }
 
@@ -473,5 +476,53 @@ func TestPickClubOffWireFutbol(t *testing.T) {
 	}
 	if body, res := css("lfc.wire.futbol", "/club.css?club=avfc", "avfc"); !strings.Contains(body, "#C8102E") || res.Header.Get("Set-Cookie") != "" {
 		t.Fatalf("pick honoured on wire.futbol: %q", body)
+	}
+}
+
+// skeleton is a page's layout: its landmarks, panels and section headings in order, without their contents.
+var skeletonRe = regexp.MustCompile(`<(section|aside|nav|footer|main|dl|form|table)\b[^>]*?(?:\sclass="([^"]*)")?[^>]*>|class="sec"[^>]*><span>([^<]*)</span>`)
+
+func skeleton(html string) []string {
+	var out []string
+	for _, m := range skeletonRe.FindAllStringSubmatch(html, -1) {
+		if m[3] != "" {
+			out = append(out, "sec "+m[3])
+		} else {
+			out = append(out, strings.TrimSpace(m[1]+" "+m[2]))
+		}
+	}
+	return out
+}
+
+// Every club's pages are laid out the same: the same panels and sections in the same places. A club without a
+// fixtures page still gets the board and its league fixtures from FPL.
+func TestEveryClubSharesOneLayout(t *testing.T) {
+	s, st := testServer(t, true)
+	var state map[string]json.RawMessage
+	json.Unmarshal(gz(t, "state.json.gz"), &state)
+	delete(state, "fixtures")
+	noFixtures, _ := json.Marshal(state)
+	for _, c := range club.Enabled() {
+		if c.FixturesURL == "" {
+			st.Put(context.Background(), c.Slug+"/state.json", noFixtures, "")
+		}
+	}
+	h := s.Handler()
+	for _, path := range []string{"/", "/squad", "/table", "/spiked", "/status"} {
+		var want []string
+		for i, c := range club.Enabled() {
+			html := body(get(t, h, c.Hosts[0], path))
+			got := skeleton(html)
+			if path == "/" && !strings.Contains(html, `class="board`) {
+				t.Errorf("%s: no board", c.Slug)
+			}
+			if i == 0 {
+				want = got
+				continue
+			}
+			if strings.Join(got, "\n") != strings.Join(want, "\n") {
+				t.Errorf("%s%s is laid out differently from %s:\n got %q\nwant %q", c.Slug, path, club.Enabled()[0].Slug, got, want)
+			}
+		}
 	}
 }

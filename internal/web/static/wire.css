@@ -192,8 +192,7 @@ main:focus { outline: none; }
 .quiet { margin-top: 24px; padding: 12px 14px; border: 1px dashed var(--rule-2); background: var(--card); color: var(--ink-2); }
 .quiet b { font: 400 15px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ok); }
 .empty { padding: 28px 0; }
-.empty p:first-child { font: 400 16px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
-.empty p + p { color: var(--ink-2); }
+.empty p { font: 400 16px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
 .toast { position: fixed; z-index: 45; left: 0; right: 0; bottom: calc(var(--tab-h) + 16px); display: flex; justify-content: center; pointer-events: none; }
 .toast a { pointer-events: auto; padding: 13px 18px; background: var(--ink); color: var(--paper); font: 400 16px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; box-shadow: 4px 4px 0 var(--club); }
 .toast b { font-weight: 400; text-decoration: underline; text-underline-offset: 4px; }
