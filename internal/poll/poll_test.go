@@ -173,3 +173,39 @@ func TestAlertsQuietHoursCapAndOnePerCluster(t *testing.T) {
 		}
 	}
 }
+
+func TestNextRunsAndClubSubset(t *testing.T) {
+	srv, hits := fakeWeb(t)
+	withClubs(t, srv.URL)
+	s := store.Dir(t.TempDir())
+	p := poller(srv.URL, s)
+	all := club.Enabled()
+	if next := p.NextRuns(context.Background(), all, 15*time.Minute); !next["aaa"].Equal(now) || !next["bbb"].Equal(now) {
+		t.Fatalf("no state should be due now: %v", next)
+	}
+
+	// Only aaa runs; bbb's sources are not read.
+	p.Clubs = all[:1]
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if hits["/old.xml"] != 0 {
+		t.Fatal("bbb was polled")
+	}
+	next := p.NextRuns(context.Background(), all, 15*time.Minute)
+	if !next["aaa"].Equal(now.Add(15*time.Minute)) || !next["bbb"].Equal(now) {
+		t.Fatalf("after aaa ran: %v", next)
+	}
+
+	// A deploy that drops a source from aaa makes it due now and clears the old source's health.
+	club.Clubs[0].Sources = []string{"shared"}
+	if next := p.NextRuns(context.Background(), all, 15*time.Minute); !next["aaa"].Equal(now) {
+		t.Fatalf("changed sources should be due now: %v", next)
+	}
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if a := loadState(t, s, "aaa"); a.Health["broken"] != nil || a.Config != club.Clubs[0].Fingerprint() {
+		t.Fatalf("health %v, config %q", a.Health, a.Config)
+	}
+}

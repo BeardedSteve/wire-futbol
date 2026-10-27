@@ -2,6 +2,9 @@
 package club
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"net"
 	"strings"
 	"time"
@@ -80,6 +83,17 @@ func (c *Club) SourceList() []Source {
 		out = append(out, Sources[k])
 	}
 	return out
+}
+
+// Fingerprint changes whenever what a poll reads for the club changes: a source added, removed or pointed
+// elsewhere, or a new fixtures page. The poller stores it with the club's state to spot a deploy that needs a run.
+func (c *Club) Fingerprint() string {
+	b, _ := json.Marshal(struct {
+		Sources               []Source
+		Fixtures, FixtureName string
+	}{c.SourceList(), c.FixturesURL, c.FixtureName})
+	h := sha1.Sum(b)
+	return hex.EncodeToString(h[:])[:12]
 }
 
 // Enabled returns the clubs that are switched on.

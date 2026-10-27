@@ -79,6 +79,7 @@ type State struct {
 	Usage      map[string]*Usage  `json:"usage"`
 	Pushes     map[string]int     `json:"pushes"`
 	LastRun    time.Time          `json:"lastRun,omitzero"`
+	Config     string             `json:"config,omitempty"` // the club's Fingerprint at the last run
 	ModelError string             `json:"modelError,omitempty"`
 	Fixtures   *Fixtures          `json:"fixtures,omitempty"`
 }

@@ -141,3 +141,18 @@ func (failing) Get(context.Context, string) ([]byte, error)       { return nil, 
 func (failing) Put(context.Context, string, []byte, string) error { return errors.New("boom") }
 func (failing) Delete(context.Context, string) error              { return errors.New("boom") }
 func (failing) List(context.Context, string) ([]string, error)    { return nil, errors.New("boom") }
+
+func TestNextRun(t *testing.T) {
+	ctx, s, now := context.Background(), store.Dir(t.TempDir()), captured
+	if got := NextRun(ctx, s, 2*time.Hour, now); !got.Equal(now) {
+		t.Fatalf("empty store: %v", got)
+	}
+	d := &Data{}
+	d.Record(Run{At: now.Add(-30 * time.Minute)})
+	if err := Save(ctx, s, d); err != nil {
+		t.Fatal(err)
+	}
+	if got := NextRun(ctx, s, 2*time.Hour, now); !got.Equal(now.Add(90 * time.Minute)) {
+		t.Fatalf("after a run: %v", got)
+	}
+}
