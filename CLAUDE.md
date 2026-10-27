@@ -30,3 +30,13 @@ Keep Railway and DNS exactly like this. If what you find differs, fix it back to
 - **Variables:** only those in the README's Environment table. No `DATABASE_URL`, `LEGACY_CLUB`, `NTFY_TOPIC`, `WIRE_URL`.
 - **Domains:** production `wire-web` has a custom domain `<slug>.wire.futbol` for every club with `Enabled: true` in `internal/club/clubs.go` (today `lfc`, `avfc`, `afc`). DNS for wire.futbol is at Namecheap: one CNAME to the Railway target and one `_railway-verify.<slug>` TXT per club. A club is live only when all three exist: `Enabled: true` on `main`, the Railway custom domain, the DNS records.
 - **Releases:** merging to `main` deploys production. Merge to `staging` first to try a change on staging. There is no `production` branch.
+
+## Railway MCP: what works and what doesn't
+
+Seen in practice (October 2026). Plan around it; don't retry the failures.
+
+- **Works:** reads (`list-*`, `describe-*`, `get-logs`, `domain-status`, `get-staged-changes`), `update-service` and `set-variables` applied live to one environment, and `generate-domain`.
+- **Fails:** `accept-deploy` and deletes. They ask the user to confirm, the question never reaches them, and the call times out after 60s. So never stage a change (`staged: true`): it can't be applied from here.
+- **Trap:** `connect-service-source` without `staged` changes the branch in every environment at once. Don't use it to change one environment's branch.
+- **Limits:** variable values come back redacted, so secrets can't be copied between environments or projects. `redeploy` fails on a service whose latest deployment was skipped. Pushing to the branch is the only way to get a fresh build.
+- **Anything that needs accept-deploy, a delete or a branch switch:** give the user a short prompt for the Railway agent in the project, or exact dashboard steps.
