@@ -139,3 +139,5 @@ type failing struct{}
 
 func (failing) Get(context.Context, string) ([]byte, error)       { return nil, errors.New("boom") }
 func (failing) Put(context.Context, string, []byte, string) error { return errors.New("boom") }
+func (failing) Delete(context.Context, string) error              { return errors.New("boom") }
+func (failing) List(context.Context, string) ([]string, error)    { return nil, errors.New("boom") }

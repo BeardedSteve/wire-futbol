@@ -54,7 +54,7 @@ func envFloat(k string, def float64) float64 {
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: wire serve|poll|squad")
+		fmt.Fprintln(os.Stderr, "usage: wire serve|poll|squad|store")
 		os.Exit(2)
 	}
 	if v := os.Getenv("ENABLE_CLUBS"); v != "" {
@@ -73,6 +73,8 @@ func main() {
 		err = runPoll(ctx)
 	case "squad":
 		err = runSquad(ctx)
+	case "store":
+		err = runStore(ctx, os.Args[2:])
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}
@@ -199,6 +201,41 @@ func runPoll(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Minute) // finish before the next 15-minute tick
 	defer cancel()
 	return p.Run(ctx)
+}
+
+// runStore is for maintenance, run as a one-off Railway service with the bucket variables:
+//
+//	wire store ls [prefix]   logs every key under prefix
+//	wire store rm key...     deletes the keys, for example avfc/state.json to rebuild a club's wire on the next poll
+func runStore(ctx context.Context, args []string) error {
+	st := openStore()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	switch {
+	case len(args) >= 1 && args[0] == "ls":
+		prefix := ""
+		if len(args) > 1 {
+			prefix = args[1]
+		}
+		keys, err := st.List(ctx, prefix)
+		if err != nil {
+			return err
+		}
+		for _, k := range keys {
+			slog.Info("key", "key", k)
+		}
+		slog.Info("listed", "prefix", prefix, "count", len(keys))
+		return nil
+	case len(args) >= 2 && args[0] == "rm":
+		for _, k := range args[1:] {
+			if err := st.Delete(ctx, k); err != nil {
+				return err
+			}
+			slog.Info("deleted", "key", k)
+		}
+		return nil
+	}
+	return errors.New("usage: wire store ls [prefix] | wire store rm key...")
 }
 
 func runSquad(ctx context.Context) error {
