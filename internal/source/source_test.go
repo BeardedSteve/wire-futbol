@@ -2,6 +2,7 @@ package source
 
 import (
 	"os"
+	"slices"
 	"testing"
 	"time"
 )
@@ -82,6 +83,15 @@ func TestClubSiteArticle(t *testing.T) {
 	}
 	if _, ok := ParseArticle([]byte("<html></html>"), links[0], "", now); ok {
 		t.Fatal("page without a title accepted")
+	}
+}
+
+func TestClubSiteDatedLinks(t *testing.T) {
+	index := []byte(`<a href="/news/2026/october/24/report-aston-villa-2-1-man-city">x</a><a href="https://www.avfc.co.uk/news/2026/october/24/report-aston-villa-2-1-man-city">dup</a><a href="https://www.avfc.co.uk/news/2026/october/26/emery-press-conference">y</a><a href="https://example.com/news/elsewhere">no</a><a href="/news/2026/october">no</a>`)
+	got := NewsLinks(index, "https://www.avfc.co.uk")
+	want := []string{"https://www.avfc.co.uk/news/2026/october/24/report-aston-villa-2-1-man-city", "https://www.avfc.co.uk/news/2026/october/26/emery-press-conference"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("links %v", got)
 	}
 }
 

@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"sort"
@@ -15,7 +16,8 @@ import (
 )
 
 var (
-	newsPathRe  = regexp.MustCompile(`href="(/news/[a-z0-9-]+)"`)
+	// newsPathRe takes /news/<slug> (liverpoolfc.com) and /news/<yyyy>/<month>/<d>/<slug> (avfc.co.uk), relative or on the site's own origin.
+	newsPathRe  = `href="(?:%s)?(/news/(?:\d{4}/[a-z]+/\d{1,2}/)?[a-z0-9-]+)"`
 	datePubRe   = regexp.MustCompile(`"datePublished":"([^"]+)"`)
 	ldJSONRe    = regexp.MustCompile(`(?s)<script[^>]*application/ld\+json[^>]*>(.*?)</script>`)
 	metaContent = func(name string) *regexp.Regexp {
@@ -29,7 +31,8 @@ var (
 func NewsLinks(index []byte, base string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, m := range newsPathRe.FindAllSubmatch(index, -1) {
+	re := regexp.MustCompile(fmt.Sprintf(newsPathRe, regexp.QuoteMeta(base)))
+	for _, m := range re.FindAllSubmatch(index, -1) {
 		u := base + string(m[1])
 		if !seen[u] {
 			seen[u] = true
