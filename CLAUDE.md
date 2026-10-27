@@ -22,11 +22,11 @@ Keep Railway and DNS exactly like this. If what you find differs, fix it back to
 
 | Environment | Id | Branch | Web URL |
 |---|---|---|---|
-| production | `2fa3fe94-599f-4f65-ad44-200228797171` | `production` | `<club>.wire.futbol` for every enabled club |
-| staging | `c217a2cc-2bad-4b0a-9e8f-b15f1ae49e16` | `main` | `wire-web-staging.up.railway.app`, `?club=<slug>` |
+| production | `2fa3fe94-599f-4f65-ad44-200228797171` | `main` | `<club>.wire.futbol` for every enabled club |
+| staging | `c217a2cc-2bad-4b0a-9e8f-b15f1ae49e16` | `staging` | `wire-web-staging.up.railway.app`, `?club=<slug>` |
 
 - **Services:** `wire-web` runs `/wire serve` with health check `/health`. `wire-poller` runs `/wire work`, restart always, no cron. Both build from `deploy/Dockerfile`, with `RAILWAY_DOCKERFILE_PATH=deploy/Dockerfile` shared so Railway never falls back to Railpack. Nothing else: no Postgres, no separate squad or cron services.
 - **Storage:** each environment has its own `wire-store` bucket. Staging must never point at production's bucket.
 - **Variables:** only those in the README's Environment table. No `DATABASE_URL`, `LEGACY_CLUB`, `NTFY_TOPIC`, `WIRE_URL`.
-- **Domains:** production `wire-web` has a custom domain `<slug>.wire.futbol` for every club with `Enabled: true` in `internal/club/clubs.go` (today `lfc`, `avfc`, `afc`). DNS for wire.futbol is at Namecheap: one CNAME to the Railway target and one `_railway-verify.<slug>` TXT per club. A club is live only when all three exist: `Enabled: true` on the `production` branch, the Railway custom domain, the DNS records.
-- **Releases:** merge to `main` to deploy staging, then `main` to `production` to deploy production.
+- **Domains:** production `wire-web` has a custom domain `<slug>.wire.futbol` for every club with `Enabled: true` in `internal/club/clubs.go` (today `lfc`, `avfc`, `afc`). DNS for wire.futbol is at Namecheap: one CNAME to the Railway target and one `_railway-verify.<slug>` TXT per club. A club is live only when all three exist: `Enabled: true` on `main`, the Railway custom domain, the DNS records.
+- **Releases:** merging to `main` deploys production. Merge to `staging` first to try a change on staging. There is no `production` branch.
