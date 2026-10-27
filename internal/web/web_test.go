@@ -28,7 +28,7 @@ import (
 
 func gz(t *testing.T, name string) []byte {
 	t.Helper()
-	f, err := os.Open("../../test/fixtures/" + name)
+	f, err := os.Open("../../testdata/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}

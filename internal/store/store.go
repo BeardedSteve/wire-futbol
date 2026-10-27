@@ -95,19 +95,3 @@ func Retry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 		}
 	}
 }
-
-// CopyIfAbsent copies from to to when to doesn't exist yet and from does. It never overwrites or deletes, so the
-// source stays usable by whatever wrote it.
-func CopyIfAbsent(ctx context.Context, s Store, from, to, contentType string) (bool, error) {
-	if _, err := s.Get(ctx, to); !errors.Is(err, ErrNotFound) {
-		return false, err
-	}
-	b, err := s.Get(ctx, from)
-	if errors.Is(err, ErrNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, s.Put(ctx, to, b, contentType)
-}

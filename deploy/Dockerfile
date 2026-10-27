@@ -1,4 +1,4 @@
-# Lives outside the repo root so Railway does not auto-detect it for the Bun services. Build from the repo root:
+# Build from the repo root:
 #   docker build -f deploy/Dockerfile .
 # Build: Go toolchain only. Module fetches never run code, and go.sum pins every dependency.
 FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS build

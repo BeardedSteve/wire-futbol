@@ -2,8 +2,6 @@
 
 Club news wires for wire.futbol. Each club's wire reads tier 1 sources, keeps the news, drops opinion, rumour and clickbait, and shows the rest in one place. Liverpool runs at lfc.wire.futbol.
 
-Production runs the Go app under `cmd/` and `internal/` (since 23 October 2026). The old Bun/TypeScript app under `services/` and `lib/` stays in the repo as a rollback until it is removed.
-
 ## How it fits together
 
 One binary, `wire`, with three commands:
@@ -63,7 +61,6 @@ Container: `docker build -f deploy/Dockerfile -t wire-futbol .` then `docker run
 | `INGEST_MAX_AGE_H` | poll | 72 |
 | `SOURCES` | poll: comma-separated source keys to read | all |
 | `SEED_STATE_URLS` | poll, staging only: `lfc=https://.../api/state.json` | none |
-| `LEGACY_CLUB` | serve, poll: copies the Bun app's root `state.json` and `subs.json` to this club's keys if they don't exist yet | none |
 | `SAVE_FIXTURES` | poll, squad: `1` saves every fetched body under `fixtures/` in the store | off |
 | `PRICE_IN_PER_MTOK_USD`, `PRICE_OUT_PER_MTOK_USD`, `USD_TO_GBP` | serve | 0.75, 3.75, 0.75 |
 
@@ -87,13 +84,8 @@ A source listed by several clubs is fetched once and its items go to each club's
 | Branch | Railway environment | Runs |
 |---|---|---|
 | `production` | production | Go app, built from `deploy/Dockerfile` |
-| `main` | staging | Bun app |
 | `claude/youthful-pascal-r6sggv` | `wire-futbol-go-staging` project | Go app, built from `deploy/Dockerfile` |
 
 ## CI
 
 `.github/workflows/go.yml`: gofmt, `go vet`, staticcheck, govulncheck, tests with `-race`, container build and a smoke test of the image. Actions are pinned by commit SHA and Dependabot proposes updates for Go modules, actions and base images.
-
-`.github/workflows/ci.yml` still checks the Bun app.
-
-The Dockerfile lives in `deploy/` because Railway builds any root Dockerfile it finds, which would switch the Bun services on `main` to the Go image. Move it to the root at cutover.

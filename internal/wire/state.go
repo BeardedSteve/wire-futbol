@@ -1,5 +1,5 @@
 // Package wire holds one club's wire state (the items each run has read and the filter's verdicts) and turns it
-// into stories. The JSON matches the Bun app's state.json so either can read the other's file.
+// into stories.
 package wire
 
 import (
