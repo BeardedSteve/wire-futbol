@@ -42,7 +42,6 @@ var Clubs = []Club{
 			{ID: "UCvS2Ys1xIehxddBNTWscLYg", Name: "Anfield Watch"},
 			{ID: "UC30avO2n6knAFiH2c8e4qiw", Name: "The Redmen TV"},
 			{ID: "UCc5C5dNupCMbyutNatfBujQ", Name: "The Anfield Wrap"},
-			{ID: "UCX1em-uaFMS02Rrk_Bowyng", Name: "Fabrizio Romano"},
 		},
 		Colours: Colours{
 			Accent: "#C8102E", AccentText: "#B30D28", AccentWash: "#FBE9EC",
@@ -73,7 +72,6 @@ var Clubs = []Club{
 			{ID: "UCsmMoJWRUvORmLnhOcOZpvw", Name: "Villa On Tour"},
 			{ID: "UCwkyBsvF9NXXqMo_66wDBrA", Name: "UTV"},
 			{ID: "UC6eF2Tld0kiKpWjud6uva0A", Name: "AVFC Vlogger"},
-			{ID: "UCX1em-uaFMS02Rrk_Bowyng", Name: "Fabrizio Romano"},
 		},
 		Colours: Colours{
 			Accent: "#670E36", AccentText: "#670E36", AccentWash: "#F3E6EC",

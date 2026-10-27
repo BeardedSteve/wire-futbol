@@ -98,7 +98,7 @@ func TestPagesRenderWithoutInlineCode(t *testing.T) {
 		"/status": {"Schedule and alerts", "liverpoolfc.com", "Refreshed", "gemini-3.8-flash"},
 		"/squad":  {`class="si si-inj"`, `class="si si-doubt"`, `<div class="med">`, `id="p-`, "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai", `hx-get="/squad/player/`},
 		"/table":  {"Premier League", `class="me"`, "Form", "Carabao Cup"},
-		"/shorts": {"Shorts", "The Anfield Wrap and Fabrizio Romano", `class="tabbar"`, `href="/shorts" hx-boost="false" aria-current="page"`},
+		"/shorts": {"Shorts", "The Redmen TV and The Anfield Wrap", `class="tabbar"`, `href="/shorts" hx-boost="false" aria-current="page"`},
 	}
 	for path, want := range pages {
 		r := get(t, h, "lfc.wire.futbol", path)
