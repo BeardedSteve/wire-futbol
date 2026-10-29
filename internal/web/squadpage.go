@@ -89,7 +89,6 @@ type availRow struct {
 
 type squadView struct {
 	M         *squad.Model
-	Why       string
 	Steps     []int
 	Positions []posView
 	Legend    []keyLabel
@@ -122,10 +121,6 @@ func (s *Server) squadPage(c *club.Club, st *wire.State, sq *squad.Data, now tim
 		m = sq.Model(c.FPLTeam, now)
 	}
 	if m == nil {
-		v.Why = "It refreshes every two hours."
-		if last := lastRun(sq); last != nil && !last.OK && last.Error != "" {
-			v.Why = "Last attempt failed: " + last.Error
-		}
 		return p
 	}
 	v.M = m

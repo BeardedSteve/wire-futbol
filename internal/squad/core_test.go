@@ -77,6 +77,9 @@ func TestHasLeft(t *testing.T) {
 	for news, want := range map[string]bool{
 		"Has joined Valencia on loan for the rest of the season": true,
 		"Has joined Internazionale permanently":                  true,
+		"has departed the club as a free agent.":                 true,
+		"has returned to Getafe CF":                              true,
+		"not included in squad.":                                 false,
 		"Personal reasons - Unknown return date":                 false,
 	} {
 		p.Status, p.News = "u", news

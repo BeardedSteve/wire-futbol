@@ -150,17 +150,17 @@ func feed(c *club.Club, all []*wire.Story, desk string, now time.Time) feedView 
 type tileView struct{ U, V, L string }
 
 type boardView struct {
-	Phase, Tag                  string // pre, matchday, live or post
-	Competition, Day, HM, Venue string
-	Us, Opp, Prep               string
-	Kickoff, URL, Official      string
-	Tiles                       []tileView
-	Elapsed                     int
-	Out, Doubt                  []flagView
-	More                        int
-	Home, Away                  string // full time
-	HomeScore, AwayScore        int
-	Next                        *fixtureView
+	Phase, Tag             string // pre, matchday, live or post
+	Competition, Day, HM   string
+	Us, Opp, Prep          string
+	Kickoff, URL, Official string
+	Tiles                  []tileView
+	Elapsed                int
+	Out, Doubt             []flagView
+	More                   int
+	Home, Away             string // full time
+	HomeScore, AwayScore   int
+	Next                   *fixtureView
 }
 
 func tiles(at, now time.Time, seconds bool) []tileView {
@@ -181,7 +181,7 @@ func tiles(at, now time.Time, seconds bool) []tileView {
 // with seconds, live with time since kick-off, then the full-time score.
 func board(c *club.Club, st *wire.State, sq *squad.Data, m *squad.Model, now time.Time) *boardView {
 	var next *fixtureView
-	if f := upcoming(c, st, now, 1); len(f) > 0 {
+	if f := upcoming(c, st, sq, now, 1); len(f) > 0 {
 		next = &f[0]
 	}
 	var last *squad.Match
@@ -229,7 +229,7 @@ func board(c *club.Club, st *wire.State, sq *squad.Data, m *squad.Model, now tim
 	if b.Phase == "" {
 		b.Phase, b.Tag = "pre", "Next up"
 	}
-	b.Competition, b.Day, b.HM, b.Venue, b.Kickoff, b.URL = next.Competition, next.Day, next.HM, next.Venue, next.Start, next.URL
+	b.Competition, b.Day, b.HM, b.Kickoff, b.URL = next.Competition, next.Day, next.HM, next.Start, next.URL
 	b.Us, b.Opp, b.Prep = c.Short, next.Opp, "v"
 	if !next.Home {
 		b.Prep = "at"
@@ -258,6 +258,7 @@ func board(c *club.Club, st *wire.State, sq *squad.Data, m *squad.Model, now tim
 // ---------- the wire page ----------
 
 type wireView struct {
+	Started      bool // the club has a state file; until then the feed says so and the rest still shows
 	Stop, Splash *storyView
 	Board        *boardView
 	Quiet        template.HTML
@@ -303,10 +304,21 @@ func lead(all []*wire.Story, from, to time.Duration, now time.Time) *wire.Story 
 func (s *Server) wirePage(c *club.Club, st *wire.State, sq *squad.Data, now time.Time, desk string) *page {
 	p := s.basePage(c, st, now, c.App(), "wire")
 	p.H1, p.Em, p.Sub = c.Short, "Wire", "Club news. Nothing else."
+	p.Rail = true
+	var m *squad.Model
+	if sq != nil {
+		m = sq.Model(c.FPLTeam, now)
+	}
+	v := &wireView{Started: st != nil, Fixtures: upcoming(c, st, sq, now, 5), Sources: sourceRows(c, st, now), Board: board(c, st, sq, m, now)}
+	if m != nil {
+		v.HasSquad = true
+		v.Standing = standing(sq, m)
+		v.Treatment = flagged(m)
+	}
+	p.Data = v
 	if st == nil {
 		return p
 	}
-	p.Rail = true
 	valid := false
 	for _, d := range desks {
 		valid = valid || d.Key == desk
@@ -315,9 +327,9 @@ func (s *Server) wirePage(c *club.Club, st *wire.State, sq *squad.Data, now time
 		desk = "all"
 	}
 	all := stories(c, st, now)
-	v := &wireView{Run: iso(st.LastRun), N: len(all), Fixtures: upcoming(c, st, now, 5), Sources: sourceRows(c, st, now)}
-	if st.LastRun.IsZero() {
-		v.Run = ""
+	v.N = len(all)
+	if !st.LastRun.IsZero() {
+		v.Run = iso(st.LastRun)
 	}
 	if x := lead(all, 0, stopPressFor, now); x != nil {
 		sv := storyCard(c, x, now)
@@ -340,17 +352,6 @@ func (s *Server) wirePage(c *club.Club, st *wire.State, sq *squad.Data, now time
 	}
 	v.Feed = feed(c, rest, desk, now)
 	p.No = v.Feed.No
-	var m *squad.Model
-	if sq != nil {
-		m = sq.Model(c.FPLTeam, now)
-	}
-	v.Board = board(c, st, sq, m, now)
-	if m != nil {
-		v.HasSquad = true
-		v.Standing = standing(sq, m)
-		v.Treatment = flagged(m)
-	}
-	p.Data = v
 	return p
 }
 

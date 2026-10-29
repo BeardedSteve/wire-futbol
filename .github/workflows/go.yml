@@ -40,5 +40,5 @@ jobs:
           test "$(docker image inspect wire-futbol:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
           docker run -d --name wire -p 3000:3000 -e DEFAULT_CLUB=lfc wire-futbol:ci
           for i in $(seq 1 20); do curl -fsS localhost:3000/health && break; sleep 0.5; done
-          curl -fsS -H 'Host: lfc.wire.futbol' localhost:3000/ | grep -q 'Starting up'
+          curl -fsS -H 'Host: lfc.wire.futbol' localhost:3000/ | grep -q 'No run yet.'
           docker rm -f wire

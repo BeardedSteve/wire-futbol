@@ -57,9 +57,11 @@ Fragment responses depend on `HX-Request` and `HX-Target`, so every page sends `
 - **Amber is darker** (`#8f5200`). The branch's amber was 4.1:1 on paper, under the 4.5:1 that small text needs. Every token is now at least 4.7:1 on paper and card, light and dark.
 - **Compression.** HTML, CSS, JavaScript and JSON are gzipped; static files are compressed once at start-up.
 - **Shorts is page 400 and the fourth tab,** with its unseen count. Spiked moves to 500 and status to 600.
+- **One layout for every club.** The rail always has fixtures, standing, treatment room and sources, in that order, with a one-line empty state. League fixtures, names and kick-offs come from FPL for every club, so a club without a fixtures page still gets the board. A fixtures page adds cup ties and match links. The board no longer shows the venue, which only a fixtures page knew.
 
 ## Not done
 
 - No live score during a match: the wire has no score feed. The board links to the club's match centre.
+- Clubs without a fixtures page (today Aston Villa and Arsenal) show league fixtures only, and their fixtures link to the club's site.
 - The table and form come from Fantasy Premier League results, so they cover league matches only, and ties past goals scored fall back to the alphabet.
 - Checked in Chromium at 390px and 1280px, light and dark. Untested in Safari and Firefox, so `:has()` on the spiked reasons (Firefox 121+, Safari 15.4+) and the double-height transform are the things to look at first.
