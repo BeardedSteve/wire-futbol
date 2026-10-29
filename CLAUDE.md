@@ -2,6 +2,10 @@
 
 See `README.md` for how the app fits together and `docs/design.md` for the front end.
 
+## Planning
+
+`docs/roadmap.md` is the plan: what excellent means, what's next, and what waits on Steve. Use the `roadmap` skill to run a session, and update the roadmap in the same pull request as the work. Open GitHub issues are an inbox to sweep into it.
+
 ## Copy on pages: as little as possible
 
 The wire is for fans checking in on their phone. Every word on a page has to earn its place.
