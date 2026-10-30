@@ -26,7 +26,7 @@ Things a session can't do from here. Each one is a few taps.
 
 At most three. The top one is what the next session picks up unless Steve says otherwise.
 
-1. **arsenal.com fails about one poll in four.** The index returns HTTP 503 and article fetches hit their deadline (Railway logs, 28-29 Oct). Overnight 29-30 Oct it failed 14 polls in 11 hours, five in a row from 03:12 to 03:57, plus three article fetches at 503. Done when: the cause is known (rate limit, bot block or outage) and arsenal.com fails fewer than one poll a day, or it's swapped for a steadier official source.
+1. **arsenal.com fails about one poll in four.** The index returns HTTP 503 and article fetches hit their deadline (Railway logs, 28-29 Oct). Overnight 29-30 Oct it failed 14 polls in 11 hours, five in a row from 03:12 to 03:57, plus three article fetches at 503. On 30 Oct, 5 of about 26 polls failed between 10:43 and 13:06, then none to 17:10. Each failure is already three attempts over about 4s, so it's more than a blip. From 30 Oct a failure logs who answered (server, CDN headers, retry-after, page title). Next step: read a day of those lines and pick the fix. Sessions can't reach arsenal.com directly (proxy). Done when: the cause is known (rate limit, bot block or outage) and arsenal.com fails fewer than one poll a day, or it's swapped for a steadier official source.
 2. **Cup ties for Villa and Arsenal.** League fixtures come from FPL, cup ties only from a fixtures page, which only Liverpool has. Done when: every enabled club's fixtures show its cup ties from one kind of source.
 
 ## Next
