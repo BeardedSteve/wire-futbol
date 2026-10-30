@@ -258,18 +258,11 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 		if res.err != nil {
 			h.Fails++
 			h.LastError, h.LastErrorAt = clip(res.err.Error(), 200), now
+			// Source health shows on /status only. A fan's phone never buzzes for our own faults.
 			log.Error("source failed", "source", s.Key, "fails", h.Fails, "err", h.LastError)
-			if h.Fails >= 4 && !h.Alerted {
-				p.notify(ctx, c, push.Message{Title: s.Name + " is failing", Body: fmt.Sprintf("%d runs in a row. Last error: %s", h.Fails, h.LastError), URL: "/status", Tag: "src-" + s.Key}, "low")
-				h.Alerted = true
-			}
 			continue
 		}
-		h.LastOK, h.LastCount = now, len(res.raws)
-		if h.Fails >= 4 && h.Alerted {
-			p.notify(ctx, c, push.Message{Title: s.Name + " is back", Body: "The wire is reading it again.", URL: "/status", Tag: "src-" + s.Key}, "low")
-		}
-		h.Fails, h.Alerted = 0, false
+		h.LastOK, h.LastCount, h.Fails = now, len(res.raws), 0
 		for _, r := range res.raws {
 			if known[r.URL] || now.Sub(r.Published) > p.IngestMaxAge {
 				continue

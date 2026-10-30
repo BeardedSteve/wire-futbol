@@ -26,16 +26,14 @@ Things a session can't do from here. Each one is a few taps.
 
 At most three. The top one is what the next session picks up unless Steve says otherwise.
 
-1. **Stop pushing source failures to fans.** `internal/poll/poll.go:262` sends "X is failing" and "X is back" to every subscriber of the club after four failed runs, ignoring quiet hours and the daily cap. On 28-29 Oct that fired for arsenal.com twice in the evening and for The Athletic at 01:16 for all three clubs. Done when: source health only shows on `/status`, with a test that a failing source sends no push.
-2. **arsenal.com fails about one poll in four.** The index returns HTTP 503 and article fetches hit their deadline (Railway logs, 28-29 Oct). Done when: the cause is known (rate limit, bot block or outage) and arsenal.com fails fewer than one poll a day, or it's swapped for a steadier official source.
-3. **The Athletic went dark for four hours.** All three Athletic feeds returned 504 from 00:28 to 04:26 on 29 Oct and recovered on their own. Done when: one more night of logs shows whether this repeats. If it does, poll it less often overnight.
+1. **arsenal.com fails about one poll in four.** The index returns HTTP 503 and article fetches hit their deadline (Railway logs, 28-29 Oct). Overnight 29-30 Oct it failed 14 polls in 11 hours, five in a row from 03:12 to 03:57, plus three article fetches at 503. Done when: the cause is known (rate limit, bot block or outage) and arsenal.com fails fewer than one poll a day, or it's swapped for a steadier official source.
+2. **Cup ties for Villa and Arsenal.** League fixtures come from FPL, cup ties only from a fixtures page, which only Liverpool has. Done when: every enabled club's fixtures show its cup ties from one kind of source.
 
 ## Next
 
 Ranked. A session moves the top one into Now when a Now slot frees up.
 
 - **Filter accuracy audit.** Sample a week of kept and spiked stories per club, count wrong calls, tune `internal/filter/prompt.tmpl`. Needs the live site (see Waiting on Steve).
-- **Cup ties for Villa and Arsenal.** League fixtures come from FPL, cup ties only from a fixtures page, which only Liverpool has. Find one cup source every club has.
 - **Check Safari and Firefox.** Only Chromium has seen the front end. `:has()` on the spiked reasons and the double-height transform are the first things to look at. Steve's iPhone is the quickest Safari check.
 - **Table tie-breaks.** Ties past goals scored fall back to the alphabet. Use head-to-head from FPL results.
 

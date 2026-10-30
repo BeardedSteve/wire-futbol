@@ -2,6 +2,9 @@ package poll
 
 import (
 	"context"
+	"crypto/ecdh"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,6 +17,7 @@ import (
 	"github.com/BeardedSteve/wire-futbol/internal/club"
 	"github.com/BeardedSteve/wire-futbol/internal/fetch"
 	"github.com/BeardedSteve/wire-futbol/internal/filter"
+	"github.com/BeardedSteve/wire-futbol/internal/push"
 	"github.com/BeardedSteve/wire-futbol/internal/store"
 	"github.com/BeardedSteve/wire-futbol/internal/wire"
 )
@@ -149,6 +153,53 @@ func TestUnreadableStateSkipsOnlyThatClub(t *testing.T) {
 	}
 	if len(loadState(t, s, "bbb").Items) != 2 {
 		t.Fatal("other club not polled")
+	}
+}
+
+// countPushes records every request to the push service and answers 201.
+type countPushes struct{ n int }
+
+func (c *countPushes) RoundTrip(*http.Request) (*http.Response, error) {
+	c.n++
+	return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(""))}, nil
+}
+
+func TestFailingSourceSendsNoPush(t *testing.T) {
+	srv, _ := fakeWeb(t)
+	withClubs(t, srv.URL)
+	s := store.Dir(t.TempDir())
+	enc := base64.RawURLEncoding
+	vk, _ := ecdh.P256().GenerateKey(rand.Reader)
+	vapid, err := push.NewVAPID(enc.EncodeToString(vk.PublicKey().Bytes()), enc.EncodeToString(vk.Bytes()), "mailto:x@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk, _ := ecdh.P256().GenerateKey(rand.Reader)
+	sub := push.Sub{Endpoint: "https://fcm.googleapis.com/fcm/send/x", Keys: push.Keys{P256dh: enc.EncodeToString(sk.PublicKey().Bytes()), Auth: enc.EncodeToString(make([]byte, 16))}}
+	b, _ := json.Marshal([]push.Sub{sub})
+	s.Put(context.Background(), "aaa/subs.json", b, "")
+	pushes := &countPushes{}
+	p := poller(srv.URL, s)
+	p.Push = &push.Sender{VAPID: vapid, Client: &http.Client{Transport: pushes}}
+
+	// The first run pushes the news. Later runs find nothing new, so any push is about the broken source.
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if pushes.n == 0 {
+		t.Fatal("news not pushed, so the test proves nothing")
+	}
+	news := pushes.n
+	for range 5 {
+		if err := p.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if st := loadState(t, s, "aaa"); st.Health["broken"].Fails != 6 {
+		t.Fatalf("fails %d", st.Health["broken"].Fails)
+	}
+	if pushes.n != news {
+		t.Fatalf("failing source sent %d pushes", pushes.n-news)
 	}
 }
 
