@@ -60,3 +60,19 @@ func TestTimeoutAndSizeCap(t *testing.T) {
 		t.Fatal("oversized body accepted")
 	}
 }
+
+func TestStatusErrorSaysWhoRefused(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "cloudflare")
+		w.Header().Set("Retry-After", "120")
+		w.WriteHeader(503)
+		w.Write([]byte("<html><title>\n  Just a moment...\n</title></html>"))
+	}))
+	defer srv.Close()
+	c := &Client{Backoff: []time.Duration{}}
+	_, err := c.Get(context.Background(), srv.URL, "", time.Second)
+	want := `HTTP 503 (server=cloudflare retry-after=120 title="Just a moment...")`
+	if err == nil || err.Error() != want {
+		t.Fatalf("got %v, want %s", err, want)
+	}
+}

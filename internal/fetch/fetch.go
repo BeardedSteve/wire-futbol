@@ -9,16 +9,52 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 )
 
 // BrowserUA is sent to news sites, some of which refuse unknown clients.
 const BrowserUA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
 
-// StatusError is a non-2xx response.
-type StatusError struct{ Code int }
+// StatusError is a non-2xx response. Hint names who answered (server, CDN, retry-after, page title),
+// so a failing source's log line says whether it was a rate limit, a bot block or an outage.
+type StatusError struct {
+	Code int
+	Hint string
+}
 
-func (e *StatusError) Error() string { return fmt.Sprintf("HTTP %d", e.Code) }
+func (e *StatusError) Error() string {
+	if e.Hint == "" {
+		return fmt.Sprintf("HTTP %d", e.Code)
+	}
+	return fmt.Sprintf("HTTP %d (%s)", e.Code, e.Hint)
+}
+
+var titleRe = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+
+// hint picks the headers and page title that identify who refused a request.
+func hint(h http.Header, body []byte) string {
+	var parts []string
+	for _, k := range []string{"Server", "Retry-After", "Cf-Ray", "Cf-Mitigated", "X-Cache", "Akamai-Grn", "X-Amz-Cf-Pop", "Via"} {
+		if v := h.Get(k); v != "" {
+			parts = append(parts, strings.ToLower(k)+"="+clip(v, 40))
+		}
+	}
+	if m := titleRe.FindSubmatch(body); m != nil {
+		if t := strings.Join(strings.Fields(string(m[1])), " "); t != "" {
+			parts = append(parts, fmt.Sprintf("title=%q", clip(t, 60)))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
 
 // Client fetches URLs.
 type Client struct {
@@ -108,8 +144,8 @@ func (c *Client) once(ctx context.Context, url, accept string, timeout time.Dura
 	}
 	defer r.Body.Close()
 	if r.StatusCode/100 != 2 {
-		io.Copy(io.Discard, io.LimitReader(r.Body, 64<<10))
-		return nil, &StatusError{Code: r.StatusCode}
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+		return nil, &StatusError{Code: r.StatusCode, Hint: hint(r.Header, body)}
 	}
 	max := c.MaxBytes
 	if max == 0 {
