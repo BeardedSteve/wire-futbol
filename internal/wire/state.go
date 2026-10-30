@@ -56,7 +56,6 @@ type Health struct {
 	LastErrorAt time.Time `json:"lastErrorAt,omitzero"`
 	LastCount   int       `json:"lastCount"`
 	Fails       int       `json:"fails"`
-	Alerted     bool      `json:"alerted,omitempty"`
 }
 
 // Usage is one day's filter spend.
