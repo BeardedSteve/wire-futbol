@@ -66,9 +66,16 @@ func ParseArticle(page []byte, url, titleSuffix string, now time.Time) (Raw, boo
 }
 
 // FetchClubSite reads the news index and up to 15 articles not already known, four at a time.
-// A failed article is logged and skipped; only a failed index fails the source.
+// A failed article is logged and skipped; only a failed index fails the source. s.Retry, when set,
+// replaces the client's retry waits for the index.
 func FetchClubSite(ctx context.Context, c *fetch.Client, s club.Source, known map[string]bool, now time.Time) ([]Raw, error) {
-	index, err := c.Get(ctx, s.URL, fetch.AcceptFeed, s.Timeout)
+	ic := c
+	if s.Retry != nil {
+		cp := *c
+		cp.Backoff = s.Retry
+		ic = &cp
+	}
+	index, err := ic.Get(ctx, s.URL, fetch.AcceptFeed, s.Timeout)
 	if err != nil {
 		return nil, err
 	}
