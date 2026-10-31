@@ -1,6 +1,8 @@
 package source
 
 import (
+	"compress/gzip"
+	"io"
 	"os"
 	"slices"
 	"testing"
@@ -104,19 +106,54 @@ func TestClubSiteIDLinks(t *testing.T) {
 	}
 }
 
-func TestParseFixtures(t *testing.T) {
-	page := []byte(`<script type="application/ld+json">{"@type":"ItemList","itemListElement":[
-{"@type":"SportsEvent","startDate":"2026-11-01T15:00:00Z","url":"https://www.liverpoolfc.com/matches/2026-27/premier-league/x","homeTeam":{"name":"Liverpool"},"awayTeam":{"name":"Aston Villa"},"location":{"name":"Anfield"}},
-{"@type":"SportsEvent","startDate":"2026-10-23T10:00:00Z","url":"https://www.liverpoolfc.com/matches/2026-27/champions-league/y","homeTeam":{"name":"Real Madrid"},"awayTeam":{"name":"Liverpool"},"location":{"name":"Bernabeu"}},
-{"@type":"SportsEvent","startDate":"2026-10-01T10:00:00Z","url":"old"},
-{"@type":"Thing","startDate":"2026-12-01T10:00:00Z"}]}</script>
-<script type="application/ld+json">not json</script>`)
-	got := ParseFixtures(page, now)
-	if len(got) != 2 {
-		t.Fatalf("fixtures %+v", got)
+// A real BBC Sport team page, Arsenal in October 2026: three Premier League matches, two in the Champions League
+// and a League Cup tie with a match page.
+func TestParseBBCFixtures(t *testing.T) {
+	f, err := os.Open("../../testdata/bbc-fixtures-arsenal-2026-10.html.gz")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got[0].Home != "Real Madrid" || got[0].Competition != "Champions League" || got[1].Competition != "Premier League" || got[1].Venue != "Anfield" {
-		t.Fatalf("fixtures %+v", got)
+	defer f.Close()
+	z, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := io.ReadAll(z)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ParseBBCFixtures(page, "arsenal", "Arsenal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("want the 3 ties outside the league, got %+v", got)
+	}
+	cup := Fixture{Start: time.Date(2026, 10, 27, 20, 0, 0, 0, time.UTC), Home: "Fleetwood", Away: "Arsenal",
+		URL: "https://www.bbc.co.uk/sport/football/live/cwgkveyrgpndt", Competition: "Carabao Cup"}
+	if !slices.Contains(got, cup) {
+		t.Errorf("no League Cup tie %+v in %+v", cup, got)
+	}
+	for _, e := range got {
+		if e.Competition == "Premier League" {
+			t.Errorf("league match kept: %+v", e)
+		}
+		if e.Home == "Bayern Munich" && e.Competition != "Champions League" {
+			t.Errorf("competition %q", e.Competition)
+		}
+	}
+}
+
+func TestParseBBCFixturesEmptyAndBroken(t *testing.T) {
+	empty := []byte(`<script>window.__INITIAL_DATA__="{\"data\":{\"sport-data-scores-fixtures?x=1\":{\"name\":\"sport-data-scores-fixtures\",\"data\":{\"eventGroups\":[]}}}}";</script>`)
+	got, err := ParseBBCFixtures(empty, "arsenal", "Arsenal")
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("a month with no ties is an empty list, got %v %v", got, err)
+	}
+	for _, page := range []string{`<html>moved</html>`, `<script>window.__INITIAL_DATA__="{\"data\":{}}";</script>`} {
+		if _, err := ParseBBCFixtures([]byte(page), "arsenal", "Arsenal"); err == nil {
+			t.Errorf("%s: want an error", page)
+		}
 	}
 }
 

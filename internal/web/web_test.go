@@ -93,9 +93,9 @@ func TestPagesRenderWithoutInlineCode(t *testing.T) {
 	s, _ := testServer(t, true)
 	h := s.Handler()
 	pages := map[string][]string{
-		"/":       {`class="story`, "NEXT UP", "BRIGHTON", "liverpool-v-brighton-and-hove-albion-english-premier-league-20261025", "Treatment room", "Standing", "Confirmed", "Unconfirmed", `aria-current="true"><b>100</b>All`},
+		"/":       {`class="story`, "NEXT UP", "BRIGHTON", "liverpool-v-chelsea-english-league-cup-20261028", "Treatment room", "Standing", "Confirmed", "Unconfirmed", `aria-current="true"><b>100</b>All`},
 		"/spiked": {"Why spiked", "Any reason", `name="bucket" value="promo"`},
-		"/status": {"Schedule and alerts", "liverpoolfc.com", "Refreshed", "gemini-3.8-flash"},
+		"/status": {"Schedule and alerts", "liverpoolfc.com", "Cup ties refreshed", "gemini-3.8-flash"},
 		"/squad":  {`class="si si-inj"`, `class="si si-doubt"`, `<div class="med">`, `id="p-`, "Goalkeepers", "Defenders", "Midfielders", "Forwards", "Availability", "Isak", "Szoboszlai", `hx-get="/squad/player/`},
 		"/table":  {"Premier League", `class="me"`, "Form", "Carabao Cup"},
 		"/shorts": {"Shorts", "The Redmen TV and The Anfield Wrap", `class="tabbar"`, `href="/shorts" hx-boost="false" aria-current="page"`},
@@ -494,18 +494,16 @@ func skeleton(html string) []string {
 	return out
 }
 
-// Every club's pages are laid out the same: the same panels and sections in the same places. A club without a
-// fixtures page still gets the board and its league fixtures from FPL.
+// Every club's pages are laid out the same: the same panels and sections in the same places. A club whose state
+// has no cup ties yet still gets the board and its league fixtures from FPL.
 func TestEveryClubSharesOneLayout(t *testing.T) {
 	s, st := testServer(t, true)
 	var state map[string]json.RawMessage
 	json.Unmarshal(gz(t, "state.json.gz"), &state)
 	delete(state, "fixtures")
 	noFixtures, _ := json.Marshal(state)
-	for _, c := range club.Enabled() {
-		if c.FixturesURL == "" {
-			st.Put(context.Background(), c.Slug+"/state.json", noFixtures, "")
-		}
+	for _, c := range club.Enabled()[1:] {
+		st.Put(context.Background(), c.Slug+"/state.json", noFixtures, "")
 	}
 	h := s.Handler()
 	for _, path := range []string{"/", "/squad", "/table", "/spiked", "/status"} {

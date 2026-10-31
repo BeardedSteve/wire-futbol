@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -178,31 +179,22 @@ type fixtureLike struct {
 }
 
 // upcoming is the club's next matches, including one that kicked off in the last two hours. FPL is the record of
-// every club's league matches, so names and kick-offs read the same for every club. A club's fixtures page, where
-// it has one, adds its cup ties and the match page link for a league match.
+// every club's league matches, so names and kick-offs read the same for every club. BBC Sport's fixtures pages add
+// cup and European ties, the same kind of source for every club.
 func upcoming(c *club.Club, st *wire.State, sq *squad.Data, now time.Time, n int) []fixtureView {
-	var page []fixtureLike
-	if st != nil && st.Fixtures != nil {
-		for _, e := range st.Fixtures.Events {
-			page = append(page, fixtureLike{e.Start, e.Home, e.Away, e.URL, e.Competition})
-		}
-	}
-	same := func(a, b time.Time) bool { d := a.Sub(b); return d > -3*time.Hour && d < 3*time.Hour }
 	all := leagueFixtures(c, sq)
-	for i := range all {
-		for _, e := range page {
-			if same(e.start, all[i].start) {
-				all[i].url = e.url
+	if st != nil && st.Fixtures != nil {
+		same := func(a, b time.Time) bool { d := a.Sub(b); return d > -3*time.Hour && d < 3*time.Hour }
+		for _, e := range st.Fixtures.Events {
+			// state written before BBC Sport replaced the club's own fixtures page also lists league matches
+			if slices.ContainsFunc(all, func(f fixtureLike) bool { return same(e.Start, f.start) }) {
+				continue
 			}
-		}
-	}
-	for _, e := range page {
-		league := false
-		for _, f := range all {
-			league = league || same(e.start, f.start)
-		}
-		if !league {
-			all = append(all, e)
+			url := e.URL
+			if url == "" {
+				url = club.Sources[c.Official].SiteBase
+			}
+			all = append(all, fixtureLike{e.Start, e.Home, e.Away, url, e.Competition})
 		}
 	}
 	sort.SliceStable(all, func(i, j int) bool { return all[i].start.Before(all[j].start) })
@@ -215,8 +207,7 @@ func upcoming(c *club.Club, st *wire.State, sq *squad.Data, now time.Time, n int
 	return out
 }
 
-// leagueFixtures are the club's Premier League matches from FPL, linked to the club's own site until its fixtures
-// page gives the match's own page.
+// leagueFixtures are the club's Premier League matches from FPL, linked to the club's own site.
 func leagueFixtures(c *club.Club, sq *squad.Data) []fixtureLike {
 	if sq == nil {
 		return nil
@@ -476,13 +467,10 @@ func (s *Server) statusPage(c *club.Club, st *wire.State, sq *squad.Data, now ti
 	default:
 		v.Headline = "Everything is working"
 	}
-	switch {
-	case c.FixturesURL == "":
-		v.Fixtures = "League only, from squad data"
-	case st.Fixtures != nil:
-		v.Fixtures = "Refreshed " + timeTag(st.Fixtures.FetchedAt, now)
-	default:
-		v.Fixtures = "Not loaded yet"
+	if st.Fixtures != nil {
+		v.Fixtures = "Cup ties refreshed " + timeTag(st.Fixtures.FetchedAt, now)
+	} else {
+		v.Fixtures = "Cup ties not loaded yet"
 	}
 	today := wire.Day(now)
 	v.Pushes = st.Pushes[today]

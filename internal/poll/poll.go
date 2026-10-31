@@ -273,11 +273,12 @@ func (p *Poller) runClub(ctx context.Context, c *club.Club, st *wire.State, resu
 		}
 	}
 
-	// 1b. fixtures every 3 hours, or straight away when the club's config changed; a failure keeps the previous list
-	if c.FixturesURL != "" && (changed || st.Fixtures == nil || now.Sub(st.Fixtures.FetchedAt) > 3*time.Hour) {
-		if b, err := p.Fetch.Get(ctx, c.FixturesURL, fetch.AcceptFeed, 30*time.Second); err != nil {
+	// 1b. cup and European ties every 3 hours, or straight away when the club's config changed: this month's and
+	// next month's BBC Sport fixtures pages. A failure keeps the previous list.
+	if c.BBCTeam != "" && (changed || st.Fixtures == nil || now.Sub(st.Fixtures.FetchedAt) > 3*time.Hour) {
+		if evs, err := p.fixtures(ctx, c, now); err != nil {
 			log.Error("fixtures failed", "err", err)
-		} else if evs := source.ParseFixtures(b, now); len(evs) > 0 {
+		} else {
 			st.Fixtures = &wire.Fixtures{FetchedAt: now, Events: evs}
 		}
 	}
@@ -425,4 +426,32 @@ func clip(s string, n int) string {
 		return s[:n]
 	}
 	return s
+}
+
+// fixtures reads the club's ties outside the league from this month's and next month's BBC Sport pages: matches
+// that kicked off less than three hours ago or later, soonest first, at most eight.
+func (p *Poller) fixtures(ctx context.Context, c *club.Club, now time.Time) ([]source.Fixture, error) {
+	y, m, _ := now.In(wire.London).Date()
+	month := time.Date(y, m, 1, 12, 0, 0, 0, wire.London)
+	out := []source.Fixture{}
+	for _, mo := range []time.Time{month, month.AddDate(0, 1, 0)} {
+		b, err := p.Fetch.Get(ctx, source.BBCFixturesURL(c.BBCTeam, mo), fetch.AcceptFeed, 30*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		evs, err := source.ParseBBCFixtures(b, c.BBCTeam, c.FixtureName)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range evs {
+			if e.Start.After(now.Add(-3 * time.Hour)) {
+				out = append(out, e)
+			}
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })
+	if len(out) > 8 {
+		out = out[:8]
+	}
+	return out, nil
 }

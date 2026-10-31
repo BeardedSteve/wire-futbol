@@ -18,6 +18,7 @@ import (
 	"github.com/BeardedSteve/wire-futbol/internal/fetch"
 	"github.com/BeardedSteve/wire-futbol/internal/filter"
 	"github.com/BeardedSteve/wire-futbol/internal/push"
+	"github.com/BeardedSteve/wire-futbol/internal/source"
 	"github.com/BeardedSteve/wire-futbol/internal/store"
 	"github.com/BeardedSteve/wire-futbol/internal/wire"
 )
@@ -45,6 +46,12 @@ func fakeWeb(t *testing.T) (*httptest.Server, map[string]int) {
 			io.WriteString(w, rss("shared-a", "shared-b"))
 		case r.URL.Path == "/broken.xml":
 			w.WriteHeader(500)
+		case strings.HasPrefix(r.URL.Path, "/sport/football/teams/"):
+			page, ok := bbcPages[strings.TrimPrefix(r.URL.Path, "/sport/football/teams/")]
+			if !ok {
+				w.WriteHeader(503)
+			}
+			io.WriteString(w, page)
 		case r.URL.Path == "/old.xml":
 			io.WriteString(w, `<rss><channel><item><title>Old</title><link>https://news.example/old</link><pubDate>Mon, 12 Oct 2026 10:00:00 GMT</pubDate></item></channel></rss>`)
 		case strings.HasSuffix(r.URL.Path, ":generateContent"):
@@ -67,17 +74,40 @@ func fakeWeb(t *testing.T) (*httptest.Server, map[string]int) {
 	return srv, hits
 }
 
+// bbcPage is a BBC Sport fixtures page holding these events, each "start|home|away|tournament urn suffix".
+func bbcPage(events ...string) string {
+	var evs []map[string]any
+	for _, e := range events {
+		f := strings.Split(e, "|")
+		team := func(n string) map[string]any {
+			return map[string]any{"shortName": n, "urn": "urn:bbc:sportsdata:football:team:" + strings.ToLower(strings.ReplaceAll(n, " ", "-"))}
+		}
+		evs = append(evs, map[string]any{"startDateTime": f[0], "home": team(f[1]), "away": team(f[2]),
+			"tournament": map[string]any{"name": f[3], "urn": "urn:bbc:sportsdata:football:tournament:" + strings.ToLower(strings.ReplaceAll(f[3], " ", "-"))}})
+	}
+	data, _ := json.Marshal(map[string]any{"data": map[string]any{"sport-data-scores-fixtures?x": map[string]any{"name": "sport-data-scores-fixtures",
+		"data": map[string]any{"eventGroups": []any{map[string]any{"secondaryGroups": []any{map[string]any{"events": evs}}}}}}}})
+	quoted, _ := json.Marshal(string(data))
+	return `<script>window.__INITIAL_DATA__=` + string(quoted) + `;</script>`
+}
+
+var bbcPages = map[string]string{
+	"team-a/scores-fixtures/2026-10": bbcPage("2026-10-20T19:00:00Z|team-a|Old FC|League Cup", "2026-10-24T14:00:00Z|team-a|C FC|Premier League", "2026-10-28T20:00:00Z|D FC|team-a|League Cup"),
+	"team-a/scores-fixtures/2026-11": bbcPage("2026-11-04T20:00:00Z|team-a|E FC|UEFA Champions League"),
+}
+
 func withClubs(t *testing.T, srv string) {
-	savedC, savedS := club.Clubs, club.Sources
-	t.Cleanup(func() { club.Clubs, club.Sources = savedC, savedS })
+	savedC, savedS, savedB := club.Clubs, club.Sources, source.BBCBase
+	t.Cleanup(func() { club.Clubs, club.Sources, source.BBCBase = savedC, savedS, savedB })
+	source.BBCBase = srv
 	club.Sources = map[string]club.Source{
 		"shared": {Key: "shared", Name: "Shared", Kind: club.RSS, URL: srv + "/shared.xml"},
 		"broken": {Key: "broken", Name: "Broken", Kind: club.RSS, URL: srv + "/broken.xml"},
 		"old":    {Key: "old", Name: "Old", Kind: club.RSS, URL: srv + "/old.xml"},
 	}
 	club.Clubs = []club.Club{
-		{Slug: "aaa", Name: "A FC", Short: "A", Mark: "A", Enabled: true, Official: "shared", Sources: []string{"shared", "broken"}},
-		{Slug: "bbb", Name: "B FC", Short: "B", Mark: "B", Enabled: true, Official: "shared", Sources: []string{"shared", "old"}},
+		{Slug: "aaa", Name: "A FC", Short: "A", Mark: "A", Enabled: true, Official: "shared", Sources: []string{"shared", "broken"}, BBCTeam: "team-a", FixtureName: "A FC"},
+		{Slug: "bbb", Name: "B FC", Short: "B", Mark: "B", Enabled: true, Official: "shared", Sources: []string{"shared", "old"}, BBCTeam: "team-b"},
 	}
 }
 
@@ -136,6 +166,39 @@ func TestSharedSourceFetchedOnceAndFailuresIsolated(t *testing.T) {
 	}
 	if a = loadState(t, s, "aaa"); len(a.Items) != 2 || a.Health["broken"].Fails != 2 {
 		t.Fatalf("second run: %d items, %d fails", len(a.Items), a.Health["broken"].Fails)
+	}
+}
+
+// Cup ties come from this month's and next month's BBC Sport pages. League matches and ties already played drop
+// out, and a club whose page fails keeps no list rather than a wrong one.
+func TestFixturesFromBBC(t *testing.T) {
+	srv, hits := fakeWeb(t)
+	withClubs(t, srv.URL)
+	s := store.Dir(t.TempDir())
+	if err := poller(srv.URL, s).Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	a := loadState(t, s, "aaa")
+	if a.Fixtures == nil || len(a.Fixtures.Events) != 2 {
+		t.Fatalf("fixtures %+v", a.Fixtures)
+	}
+	if e := a.Fixtures.Events[0]; e.Home != "D FC" || e.Competition != "Carabao Cup" || !e.Start.Equal(time.Date(2026, 10, 28, 20, 0, 0, 0, time.UTC)) {
+		t.Errorf("first tie %+v", e)
+	}
+	if e := a.Fixtures.Events[1]; e.Home != "A FC" || e.Away != "E FC" || e.Competition != "Champions League" {
+		t.Errorf("second tie %+v", e)
+	}
+	if b := loadState(t, s, "bbb"); b.Fixtures != nil {
+		t.Errorf("failed page stored %+v", b.Fixtures)
+	}
+
+	// Fresh for three hours: the next run doesn't fetch again.
+	before := hits["/sport/football/teams/team-a/scores-fixtures/2026-10"]
+	if err := poller(srv.URL, s).Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if hits["/sport/football/teams/team-a/scores-fixtures/2026-10"] != before {
+		t.Error("fixtures refetched within three hours")
 	}
 }
 
