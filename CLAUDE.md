@@ -22,7 +22,7 @@ The wire is for fans checking in on their phone. Every word on a page has to ear
 Every club's pages show the same panels and sections in the same places. Only the club's name, colour and data differ.
 
 - A section with no data keeps its heading and shows one short line (`No fixtures yet.`). Never drop a section or panel for one club.
-- Anything shown must come from a source every club has. FPL is the record for league fixtures, the table and the squad. A club's own fixtures page only adds cup ties and match links.
+- Anything shown must come from a source every club has. FPL is the record for league fixtures, the table and the squad. BBC Sport's team fixtures page (`BBCTeam` in `clubs.go`) adds cup and European ties.
 - `TestEveryClubSharesOneLayout` compares every enabled club's pages. Keep it passing when you add a club or a section.
 
 ## Hosting: the one ideal state
