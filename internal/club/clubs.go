@@ -45,7 +45,7 @@ var Clubs = []Club{
 		Official:    "lfc",
 		Sources:     []string{"lfc", "sky", "bbc", "echo", "athletic"},
 		ReadsLine:   "liverpoolfc.com, BBC Sport, Sky Sports, The Athletic and the Liverpool Echo",
-		FixturesURL: "https://www.liverpoolfc.com/matches/mens-team/fixtures",
+		BBCTeam:     "liverpool",
 		FixtureName: "Liverpool",
 		FPLTeam:     "LIV",
 		Shorts: []Channel{
@@ -76,6 +76,7 @@ var Clubs = []Club{
 		Official:    "avfc",
 		Sources:     []string{"avfc", "sky-avfc", "bbc-avfc", "mail", "athletic-avfc"},
 		ReadsLine:   "avfc.co.uk, BBC Sport, Sky Sports, The Athletic and the Birmingham Mail",
+		BBCTeam:     "aston-villa",
 		FixtureName: "Aston Villa",
 		FPLTeam:     "AVL",
 		Shorts: []Channel{
@@ -106,6 +107,7 @@ var Clubs = []Club{
 		Official:    "afc",
 		Sources:     []string{"afc", "sky-afc", "bbc-afc", "fl-afc", "athletic-afc"},
 		ReadsLine:   "arsenal.com, BBC Sport, Sky Sports, The Athletic and football.london",
+		BBCTeam:     "arsenal",
 		FixtureName: "Arsenal",
 		FPLTeam:     "ARS",
 		Shorts: []Channel{

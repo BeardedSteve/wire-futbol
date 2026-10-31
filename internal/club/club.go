@@ -63,7 +63,7 @@ type Club struct {
 	Official    string // key of the club's own site among Sources
 	Sources     []string
 	ReadsLine   string // footer: which outlets the wire reads
-	FixturesURL string // club fixtures page with schema.org SportsEvent JSON-LD
+	BBCTeam     string // BBC Sport team slug: its fixtures page gives cup and European ties
 	FixtureName string // the club's name as it appears in fixture data
 	FPLTeam     string // Fantasy Premier League team short name
 	Shorts      []Channel
@@ -87,12 +87,12 @@ func (c *Club) SourceList() []Source {
 }
 
 // Fingerprint changes whenever what a poll reads for the club changes: a source added, removed or pointed
-// elsewhere, or a new fixtures page. The poller stores it with the club's state to spot a deploy that needs a run.
+// elsewhere, or a new BBC team page. The poller stores it with the club's state to spot a deploy that needs a run.
 func (c *Club) Fingerprint() string {
 	b, _ := json.Marshal(struct {
 		Sources               []Source
 		Fixtures, FixtureName string
-	}{c.SourceList(), c.FixturesURL, c.FixtureName})
+	}{c.SourceList(), c.BBCTeam, c.FixtureName})
 	h := sha1.Sum(b)
 	return hex.EncodeToString(h[:])[:12]
 }

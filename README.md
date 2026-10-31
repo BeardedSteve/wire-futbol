@@ -16,7 +16,7 @@ One binary, `wire`:
 `wire work` decides what is due from the bucket when it starts, so a deploy runs exactly what it needs to:
 
 - A club with no `state.json` (newly enabled, or deleted to rebuild it) polls straight away.
-- A club whose sources or fixtures page changed polls straight away. Each state file stores a fingerprint of the club's sources, and that run drops health for removed sources and refetches fixtures.
+- A club whose sources or BBC team changed polls straight away. Each state file stores a fingerprint of the club's sources, and that run drops health for removed sources and refetches cup ties.
 - Every other club, and the squad import, keeps its schedule from its last run, so deploying twice in a row costs no extra runs.
 
 Railway cron services never run on deploy, which is why the worker replaced them.
@@ -26,7 +26,7 @@ Everything is stored as JSON in a Railway bucket (or a local directory). A sourc
 | Package | Holds |
 |---|---|
 | `internal/club` | Club and source config (`clubs.go`), Host to club resolution |
-| `internal/source` | RSS/Atom, club website, fixtures, YouTube Shorts parsers |
+| `internal/source` | RSS/Atom, club website, BBC Sport fixtures, YouTube Shorts parsers |
 | `internal/fetch` | Outbound HTTP: timeouts, retries with backoff, size cap |
 | `internal/filter` | Gemini prompt (`prompt.tmpl`), schema and clustering |
 | `internal/wire` | State file model and story building |
@@ -85,7 +85,7 @@ A source listed by several clubs is fetched once and its items go to each club's
 
 ## Add a club
 
-1. Add a `Club` to `Clubs` in `internal/club/clubs.go`: slug, names, mark, host (`<slug>.wire.futbol`), sources (the club's own site first), FPL team short name (for example `ARS`), Shorts channels, colours for both themes and prompt details. Leave `Enabled: false`. A fixtures page with schema.org `SportsEvent` data is optional: league fixtures come from FPL, and the page adds cup ties.
+1. Add a `Club` to `Clubs` in `internal/club/clubs.go`: slug, names, mark, host (`<slug>.wire.futbol`), sources (the club's own site first), FPL team short name (for example `ARS`), BBC Sport team slug (`arsenal` from `bbc.co.uk/sport/football/teams/arsenal`), Shorts channels, colours for both themes and prompt details. Leave `Enabled: false`. League fixtures come from FPL. Cup and European ties come from the BBC team's fixtures page.
 2. Run `go test ./...`.
 3. Try it on staging: add the slug to `ENABLE_CLUBS` on the staging web and poller services. The poller restarts and polls the new club straight away. Then open `https://wire-web-staging.up.railway.app/?club=<slug>`. Outside wire.futbol, `?club=` picks the club and a cookie keeps it until the next `?club=`.
 4. Turn on `Enabled`, merge to `main`, add `<slug>.wire.futbol` as a custom domain on the production `wire-web` service, and add the CNAME and `_railway-verify` TXT records Railway gives you to the wire.futbol zone at Namecheap.

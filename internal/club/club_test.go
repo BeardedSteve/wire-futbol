@@ -59,8 +59,8 @@ func TestConfigIsConsistent(t *testing.T) {
 				t.Errorf("source %q has key %q", k, s.Key)
 			}
 		}
-		if c.FPLTeam == "" || c.FixtureName == "" || c.Mark == "" {
-			t.Errorf("%s: missing FPL team, fixture name or mark", c.Slug)
+		if c.FPLTeam == "" || c.FixtureName == "" || c.Mark == "" || c.BBCTeam == "" {
+			t.Errorf("%s: missing FPL team, fixture name, mark or BBC team", c.Slug)
 		}
 		if k := c.Colours; k.Accent == "" || k.AccentText == "" || k.AccentDark == "" || k.AccentTextDark == "" {
 			t.Errorf("%s: every club needs its colour and text colour for both themes", c.Slug)

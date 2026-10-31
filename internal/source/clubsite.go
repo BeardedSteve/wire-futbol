@@ -2,11 +2,9 @@ package source
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +18,6 @@ var (
 	// (arsenal.com), relative or on the site's own origin.
 	newsPathRe  = `href="(?:%s)?(/news/(?:\d{4}/[a-z]+/\d{1,2}/)?[a-z0-9-]+(?:-[A-Za-z0-9]{12})?)"`
 	datePubRe   = regexp.MustCompile(`"datePublished":"([^"]+)"`)
-	ldJSONRe    = regexp.MustCompile(`(?s)<script[^>]*application/ld\+json[^>]*>(.*?)</script>`)
 	metaContent = func(name string) *regexp.Regexp {
 		return regexp.MustCompile(`<meta (?:property|name)="` + regexp.QuoteMeta(name) + `" content="([^"]*)"`)
 	}
@@ -115,93 +112,4 @@ func FetchClubSite(ctx context.Context, c *fetch.Client, s club.Source, known ma
 		}
 	}
 	return out, nil
-}
-
-// Fixture is one upcoming or live match.
-type Fixture struct {
-	Start       time.Time `json:"start"`
-	Home        string    `json:"home"`
-	Away        string    `json:"away"`
-	Venue       string    `json:"venue"`
-	URL         string    `json:"url"`
-	Competition string    `json:"competition,omitempty"`
-}
-
-func competitionFromURL(u string) string {
-	switch {
-	case strings.Contains(u, "premier-league"):
-		return "Premier League"
-	case strings.Contains(u, "champions-league"):
-		return "Champions League"
-	case strings.Contains(u, "carabao"), strings.Contains(u, "league-cup"), strings.Contains(u, "efl-cup"):
-		return "Carabao Cup"
-	case strings.Contains(u, "fa-cup"):
-		return "FA Cup"
-	}
-	return ""
-}
-
-type ldEvent struct {
-	Type      string `json:"@type"`
-	StartDate string `json:"startDate"`
-	URL       string `json:"url"`
-	HomeTeam  struct {
-		Name string `json:"name"`
-	} `json:"homeTeam"`
-	AwayTeam struct {
-		Name string `json:"name"`
-	} `json:"awayTeam"`
-	Location struct {
-		Name string `json:"name"`
-	} `json:"location"`
-}
-
-type ldList struct {
-	ItemListElement []json.RawMessage `json:"itemListElement"`
-}
-
-// ParseFixtures reads schema.org SportsEvent lists from a fixtures page: matches that kicked off less than
-// three hours ago or later, soonest first, at most eight.
-func ParseFixtures(page []byte, now time.Time) []Fixture {
-	var events []Fixture
-	for _, m := range ldJSONRe.FindAllSubmatch(page, -1) {
-		var lists []ldList
-		raw := []byte(strings.TrimSpace(string(m[1])))
-		if len(raw) > 0 && raw[0] == '[' {
-			if json.Unmarshal(raw, &lists) != nil {
-				continue
-			}
-		} else {
-			var one ldList
-			if json.Unmarshal(raw, &one) != nil {
-				continue
-			}
-			lists = []ldList{one}
-		}
-		for _, l := range lists {
-			for _, el := range l.ItemListElement {
-				var e ldEvent
-				if json.Unmarshal(el, &e) != nil || e.Type != "SportsEvent" || e.StartDate == "" {
-					continue
-				}
-				start, ok := ParseDate(e.StartDate)
-				if !ok {
-					continue
-				}
-				events = append(events, Fixture{Start: start, Home: Clean(e.HomeTeam.Name), Away: Clean(e.AwayTeam.Name), Venue: Clean(e.Location.Name), URL: e.URL, Competition: competitionFromURL(e.URL)})
-			}
-		}
-	}
-	soon := now.Add(-3 * time.Hour)
-	kept := events[:0]
-	for _, e := range events {
-		if e.Start.After(soon) {
-			kept = append(kept, e)
-		}
-	}
-	sort.SliceStable(kept, func(i, j int) bool { return kept[i].Start.Before(kept[j].Start) })
-	if len(kept) > 8 {
-		kept = kept[:8]
-	}
-	return kept
 }
