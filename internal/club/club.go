@@ -25,9 +25,10 @@ type Source struct {
 	Short       string // name on story cards
 	Kind        Kind
 	URL         string
-	Timeout     time.Duration // per request; zero means the fetch client's default
-	SiteBase    string        // ClubSite only: origin that news paths are relative to
-	TitleSuffix string        // ClubSite only: trimmed from og:title
+	Timeout     time.Duration   // per request; zero means the fetch client's default
+	Retry       []time.Duration // ClubSite only: waits before each retry of the news index; nil means the fetch client's default
+	SiteBase    string          // ClubSite only: origin that news paths are relative to
+	TitleSuffix string          // ClubSite only: trimmed from og:title
 }
 
 // Channel is a YouTube channel whose Shorts appear on the Shorts page.

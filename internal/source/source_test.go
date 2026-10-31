@@ -2,11 +2,18 @@ package source
 
 import (
 	"compress/gzip"
+	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/BeardedSteve/wire-futbol/internal/club"
+	"github.com/BeardedSteve/wire-futbol/internal/fetch"
 )
 
 var now = time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
@@ -215,5 +222,25 @@ func TestParseDate(t *testing.T) {
 		if !ok || got.Format(time.RFC3339) != c.want {
 			t.Errorf("ParseDate(%q) = %v %v, want %s", c.in, got, ok, c.want)
 		}
+	}
+}
+
+func TestClubSiteIndexUsesSourceRetry(t *testing.T) {
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if n.Add(1) < 3 {
+			w.WriteHeader(503)
+			return
+		}
+		w.Write([]byte("<html></html>"))
+	}))
+	defer srv.Close()
+	c := &fetch.Client{Backoff: []time.Duration{}} // the client alone never retries
+	s := club.Source{Key: "t", URL: srv.URL, SiteBase: srv.URL, Retry: []time.Duration{time.Millisecond, time.Millisecond}}
+	if _, err := FetchClubSite(context.Background(), c, s, nil, now); err != nil || n.Load() != 3 {
+		t.Fatalf("err %v after %d tries", err, n.Load())
+	}
+	if c.Backoff == nil || len(c.Backoff) != 0 {
+		t.Fatal("source retry leaked into the shared client")
 	}
 }

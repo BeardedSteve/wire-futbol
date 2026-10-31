@@ -23,6 +23,9 @@ var Sources = map[string]Source{
 	"afc": {
 		Key: "afc", Name: "arsenal.com", Short: "Club", Kind: ClubSite,
 		URL: "https://www.arsenal.com/news", SiteBase: "https://www.arsenal.com",
+		// The index answers 503 for minutes at a time, about one poll in four (Oct 2026). Waiting longer
+		// between attempts rides out most of those outages.
+		Retry: []time.Duration{10 * time.Second, 30 * time.Second},
 	},
 	"sky-afc":      {Key: "sky-afc", Name: "Sky Sports", Short: "Sky", Kind: RSS, URL: "https://www.skysports.com/rss/11670"},
 	"bbc-afc":      {Key: "bbc-afc", Name: "BBC Sport", Short: "BBC", Kind: RSS, URL: "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml"},
